@@ -22,9 +22,17 @@ export const useDragPan = (initialOffset: Point) => {
     offsetY: initialOffset.y,
   });
   const animationFrameRef = useRef<number | null>(null);
+  const momentumFrameRef = useRef<number | null>(null);
+  const lastDeltaRef = useRef<Point>({ x: 0, y: 0 });
+  const lastTimeRef = useRef<number | null>(null);
+  const velocityRef = useRef<Point>({ x: 0, y: 0 });
 
   const beginDrag = useCallback(
     (clientX: number, clientY: number) => {
+      if (momentumFrameRef.current !== null) {
+        cancelAnimationFrame(momentumFrameRef.current);
+        momentumFrameRef.current = null;
+      }
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
@@ -35,6 +43,9 @@ export const useDragPan = (initialOffset: Point) => {
         offsetX: offset.x,
         offsetY: offset.y,
       };
+      lastDeltaRef.current = { x: 0, y: 0 };
+      velocityRef.current = { x: 0, y: 0 };
+      lastTimeRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now();
       setIsDragging(true);
     },
     [offset.x, offset.y]
@@ -46,6 +57,18 @@ export const useDragPan = (initialOffset: Point) => {
       const { pointerX, pointerY, offsetX, offsetY } = dragStartRef.current;
       const deltaX = clientX - pointerX;
       const deltaY = clientY - pointerY;
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const lastTime = lastTimeRef.current ?? now;
+      const elapsed = Math.max(1, now - lastTime); // avoid divide by zero
+      const mapDeltaX = -(deltaX - lastDeltaRef.current.x);
+      const mapDeltaY = -(deltaY - lastDeltaRef.current.y);
+      lastDeltaRef.current = { x: deltaX, y: deltaY };
+      lastTimeRef.current = now;
+      const alpha = 0.25;
+      velocityRef.current = {
+        x: velocityRef.current.x * (1 - alpha) + (mapDeltaX / elapsed) * alpha,
+        y: velocityRef.current.y * (1 - alpha) + (mapDeltaY / elapsed) * alpha,
+      };
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
       }
@@ -72,13 +95,68 @@ export const useDragPan = (initialOffset: Point) => {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    if (momentumFrameRef.current !== null) {
+      cancelAnimationFrame(momentumFrameRef.current);
+      momentumFrameRef.current = null;
+    }
+
+    const startMomentum = () => {
+      const speed = Math.hypot(velocityRef.current.x, velocityRef.current.y);
+      const minSpeed = 0.05; // px per ms threshold for fling
+      if (speed < minSpeed) {
+        velocityRef.current = { x: 0, y: 0 };
+        lastDeltaRef.current = { x: 0, y: 0 };
+        lastTimeRef.current = null;
+        return;
+      }
+
+      const friction = 0.0035; // exponential friction for decay
+      const step = (prevTime: number) => {
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        const dt = Math.max(1, now - prevTime);
+        const damping = Math.exp(-friction * dt);
+        velocityRef.current = {
+          x: velocityRef.current.x * damping,
+          y: velocityRef.current.y * damping,
+        };
+
+        const vx = velocityRef.current.x;
+        const vy = velocityRef.current.y;
+        const moveX = vx * dt;
+        const moveY = vy * dt;
+
+        setOffset((prev) => ({
+          x: prev.x + moveX,
+          y: prev.y + moveY,
+        }));
+
+        if (Math.hypot(vx, vy) < 0.01) {
+          velocityRef.current = { x: 0, y: 0 };
+          momentumFrameRef.current = null;
+          lastDeltaRef.current = { x: 0, y: 0 };
+          lastTimeRef.current = null;
+          return;
+        }
+
+        momentumFrameRef.current = requestAnimationFrame(() => step(now));
+      };
+
+      momentumFrameRef.current = requestAnimationFrame(() =>
+        step(typeof performance !== 'undefined' ? performance.now() : Date.now())
+      );
+    };
+
+    startMomentum();
     setIsDragging(false);
-  }, []);
+  }, [setOffset]);
 
   useEffect(() => {
     return () => {
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (momentumFrameRef.current !== null) {
+        cancelAnimationFrame(momentumFrameRef.current);
       }
     };
   }, []);

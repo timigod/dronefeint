@@ -271,7 +271,6 @@ export const Map = () => {
     return () => cancelAnimationFrame(animationId);
   }, []);
 
-
   if (!scenario || !structures.length || !players.length) {
     return (
       <div
@@ -509,6 +508,7 @@ export const Map = () => {
   const touchStartTimeRef = useRef<number>(0);
   const touchCanvasStartRef = useRef<{ x: number; y: number } | null>(null);
   const isTouchDraggingRef = useRef(false);
+  const touchLastHoveredRef = useRef<Structure | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
@@ -529,6 +529,7 @@ export const Map = () => {
     isTouchDraggingRef.current = false;
     
     // Always clear hover on touch start - we'll show it on touch end if it was a tap
+    touchLastHoveredRef.current = hoveredStructure;
     clearHover();
   };
 
@@ -586,7 +587,15 @@ export const Map = () => {
         const coords = toCanvasCoords(touch.clientX, touch.clientY);
         if (coords) {
           setMousePos(coords);
-          updateHover({ clientX: coords.x, clientY: coords.y, offset });
+          const tappedStructure = updateHover({ clientX: coords.x, clientY: coords.y, offset });
+          const previouslyHovered = touchLastHoveredRef.current;
+
+          if (tappedStructure && previouslyHovered && tappedStructure.id === previouslyHovered.id) {
+            clearHover();
+            touchLastHoveredRef.current = null;
+          } else {
+            touchLastHoveredRef.current = tappedStructure ?? null;
+          }
         }
         e.preventDefault();
       }
