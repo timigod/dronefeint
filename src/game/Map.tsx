@@ -18,58 +18,27 @@ import { drawGlyphText, measureGlyphText, GLYPH_HEIGHT } from './glyphs';
 import { generateStartingScenario, Player } from './scenarios/startingScenario';
 import { DevFairnessOverlay } from './DevFairnessOverlay';
 
-const DESKTOP_BASE_SCALE = 0.75;
-const MOBILE_PADDING_FACTOR = 1.15;
-const MOBILE_MIN_SCALE = 1.1;
-const MOBILE_MAX_SCALE = 3.25;
-const MOBILE_EXTRA_PADDING = 160;
+const VIEWPORT_SCALE = 0.75;
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-
-const computeBattlefieldRadius = (structures: Structure[]) => {
-  if (!structures.length) {
-    return Math.min(MAP_WIDTH, MAP_HEIGHT) / 2;
+const getViewportScale = () => {
+  if (typeof window === 'undefined') {
+    return VIEWPORT_SCALE;
   }
-
-  const centerX = MAP_WIDTH / 2;
-  const centerY = MAP_HEIGHT / 2;
-
-  return structures.reduce((radius, structure) => {
-    const distanceToCenter = Math.hypot(structure.x - centerX, structure.y - centerY);
-    return Math.max(radius, distanceToCenter + structure.size);
-  }, 0);
+  return isMobileDevice() ? VIEWPORT_SCALE * 2 : VIEWPORT_SCALE;
 };
 
-const getViewportSize = (structures: Structure[]) => {
+const getViewportSize = () => {
+  const scale = getViewportScale();
+
   if (typeof window === 'undefined') {
-    const fallbackWidth = Math.round(1280 * DESKTOP_BASE_SCALE);
-    const fallbackHeight = Math.round(720 * DESKTOP_BASE_SCALE);
+    const fallbackWidth = Math.round(1280 * scale);
+    const fallbackHeight = Math.round(720 * scale);
     return { width: fallbackWidth, height: fallbackHeight };
   }
 
-  const isMobile = isMobileDevice();
-  const windowWidth = Math.max(1, window.innerWidth);
-  const windowHeight = Math.max(1, window.innerHeight);
-
-  if (!isMobile) {
-    return {
-      width: Math.max(1, Math.round(windowWidth * DESKTOP_BASE_SCALE)),
-      height: Math.max(1, Math.round(windowHeight * DESKTOP_BASE_SCALE)),
-    };
-  }
-
-  const battlefieldRadius = computeBattlefieldRadius(structures);
-  const paddedRadius = battlefieldRadius * MOBILE_PADDING_FACTOR + MOBILE_EXTRA_PADDING;
-  const desiredDiameter = Math.min(Math.max(paddedRadius * 2, 1), Math.max(MAP_WIDTH, MAP_HEIGHT) * 1.5);
-
-  const widthScale = desiredDiameter / windowWidth;
-  const heightScale = desiredDiameter / windowHeight;
-  const rawScale = Math.max(widthScale, heightScale);
-  const targetScale = clamp(rawScale, MOBILE_MIN_SCALE, MOBILE_MAX_SCALE);
-
   return {
-    width: Math.max(1, Math.round(windowWidth * targetScale)),
-    height: Math.max(1, Math.round(windowHeight * targetScale)),
+    width: Math.max(1, Math.round(window.innerWidth * scale)),
+    height: Math.max(1, Math.round(window.innerHeight * scale)),
   };
 };
 
@@ -110,7 +79,7 @@ export const Map = () => {
   const [activePlayerIndex, setActivePlayerIndex] = useState<number>(scenario.activePlayerIndex);
   const activePlayer = players[activePlayerIndex] ?? players[0];
   const accentColor = activePlayer?.color ?? '#dc3545';
-  const [viewportSize, setViewportSize] = useState(() => getViewportSize(structures));
+  const [viewportSize, setViewportSize] = useState(() => getViewportSize());
   const viewportSizeRef = useRef(viewportSize);
   viewportSizeRef.current = viewportSize;
   const previousViewportRef = useRef(viewportSize);
@@ -164,7 +133,7 @@ export const Map = () => {
       }
       animationFrameId = window.requestAnimationFrame(() => {
         setViewportSize((prev) => {
-          const next = getViewportSize(structures);
+          const next = getViewportSize();
           if (prev.width === next.width && prev.height === next.height) {
             return prev;
           }
@@ -182,7 +151,7 @@ export const Map = () => {
       }
       window.removeEventListener('resize', handleResize);
     };
-  }, [structures]);
+  }, []);
 
   useEffect(() => {
     const prev = previousViewportRef.current;
@@ -567,10 +536,10 @@ export const Map = () => {
       const deltaY = touch.clientY - touchDragStartRef.current.y;
       
       // Apply delta directly to offset for natural touch behavior
-      // Dragging left (negative deltaX) moves map left (offset increases)
+      // Dragging left (negative deltaX) moves map left (offset decreases)
       setOffset((prev) => ({
-        x: prev.x - deltaX,
-        y: prev.y - deltaY,
+        x: prev.x + deltaX,
+        y: prev.y + deltaY,
       }));
       
       // Update drag start for next move
