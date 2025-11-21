@@ -461,22 +461,24 @@ export const CommandPalette = ({
           )}
         </div>
 
-        {/* Footer with shortcuts hint */}
-        <div
-          style={{
-            padding: '8px 16px',
-            borderTop: `1px solid ${accentRgba(0.3)}`,
-            fontSize: '11px',
-            color: accentRgba(0.5),
-            display: 'flex',
-            justifyContent: 'space-between',
-          }}
-        >
-          <span>↑↓ Navigate</span>
-          <span>← → Adjust</span>
-          <span>↵ Select/Expand</span>
-          <span>ESC Close</span>
-        </div>
+        {/* Footer with shortcuts hint - hidden on mobile */}
+        {!isMobile && (
+          <div
+            style={{
+              padding: '8px 16px',
+              borderTop: `1px solid ${accentRgba(0.3)}`,
+              fontSize: '11px',
+              color: accentRgba(0.5),
+              display: 'flex',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span>↑↓ Navigate</span>
+            <span>← → Adjust</span>
+            <span>↵ Select/Expand</span>
+            <span>ESC Close</span>
+          </div>
+        )}
       </div>
     </>
   );

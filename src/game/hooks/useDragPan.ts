@@ -5,16 +5,30 @@ interface Point {
   y: number;
 }
 
+interface DragState {
+  pointerX: number;
+  pointerY: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 export const useDragPan = (initialOffset: Point) => {
   const [offset, setOffset] = useState<Point>(initialOffset);
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef<Point>({ x: 0, y: 0 });
+  const dragStartRef = useRef<DragState>({
+    pointerX: 0,
+    pointerY: 0,
+    offsetX: initialOffset.x,
+    offsetY: initialOffset.y,
+  });
 
   const beginDrag = useCallback(
     (clientX: number, clientY: number) => {
       dragStartRef.current = {
-        x: clientX - offset.x,
-        y: clientY - offset.y,
+        pointerX: clientX,
+        pointerY: clientY,
+        offsetX: offset.x,
+        offsetY: offset.y,
       };
       setIsDragging(true);
     },
@@ -24,9 +38,12 @@ export const useDragPan = (initialOffset: Point) => {
   const updateDrag = useCallback(
     (clientX: number, clientY: number) => {
       if (!isDragging) return;
+      const { pointerX, pointerY, offsetX, offsetY } = dragStartRef.current;
+      const deltaX = clientX - pointerX;
+      const deltaY = clientY - pointerY;
       setOffset({
-        x: clientX - dragStartRef.current.x,
-        y: clientY - dragStartRef.current.y,
+        x: offsetX - deltaX,
+        y: offsetY - deltaY,
       });
     },
     [isDragging]
