@@ -18,7 +18,7 @@ export const CommandPaletteButton = ({
   const baseStyle: React.CSSProperties = {
     position: 'absolute',
     top: isMobile ? 'auto' : '20px',
-    bottom: isMobile ? 'calc(20px + env(safe-area-inset-bottom, 0px))' : 'auto',
+    bottom: isMobile ? 'calc(28px + env(safe-area-inset-bottom, 0px))' : 'auto',
     right: '20px',
     width: '44px',
     height: '44px',

@@ -187,6 +187,7 @@ export const Map = () => {
         cursor: isDragging ? 'grabbing' : hoveredStructure ? 'pointer' : 'grab',
         position: 'relative',
         backgroundColor: '#050505',
+        paddingBottom: isMobile ? 'env(safe-area-inset-bottom, 0px)' : 0,
       }}
     >
       {!isReady && (

@@ -3,13 +3,22 @@ export interface ViewportSize {
   height: number;
 }
 
-const VIEWPORT_SCALE = 1;
+const DESKTOP_VIEWPORT_SCALE = 1;
+const MOBILE_VIEWPORT_SCALE = 2; // default: show 2x more area on mobile
+
+export const isMobileDevice = () => {
+  if (typeof window === 'undefined') return false;
+  return (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    window.innerWidth <= 768
+  );
+};
 
 export const getViewportScale = () => {
   if (typeof window === 'undefined') {
-    return VIEWPORT_SCALE;
+    return DESKTOP_VIEWPORT_SCALE;
   }
-  return VIEWPORT_SCALE;
+  return isMobileDevice() ? MOBILE_VIEWPORT_SCALE : DESKTOP_VIEWPORT_SCALE;
 };
 
 export const getViewportSize = (): ViewportSize => {
@@ -25,12 +34,4 @@ export const getViewportSize = (): ViewportSize => {
     width: Math.max(1, Math.round(window.innerWidth * scale)),
     height: Math.max(1, Math.round(window.innerHeight * scale)),
   };
-};
-
-export const isMobileDevice = () => {
-  if (typeof window === 'undefined') return false;
-  return (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    window.innerWidth <= 768
-  );
 };
