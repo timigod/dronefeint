@@ -466,38 +466,114 @@ export const Map = () => {
     endDrag();
   };
 
+  const touchStartPosRef = useRef<{ x: number; y: number; offset: { x: number; y: number } } | null>(null);
+  const touchStartTimeRef = useRef<number>(0);
+  const touchDragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [isTouchDragging, setIsTouchDragging] = useState(false);
+
   const handleTouchStart = (e: React.TouchEvent) => {
-    e.preventDefault();
     const touch = e.touches[0];
     if (!touch) return;
-    const coords = toCanvasCoords(touch.clientX, touch.clientY);
-    if (!coords) return;
-    beginDrag(coords.x, coords.y);
+    
+    e.preventDefault();
+    
+    // Store initial touch position and time for tap detection
+    touchStartPosRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      offset: { ...offset },
+    };
+    touchStartTimeRef.current = Date.now();
+    
+    // Always clear hover on touch start - we'll show it on touch end if it was a tap
     clearHover();
+    
+    // Prepare for dragging - we'll determine if it's actually a drag in touchMove
+    touchDragStartRef.current = { x: touch.clientX, y: touch.clientY };
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    e.preventDefault();
     const touch = e.touches[0];
     if (!touch) return;
+    
+    e.preventDefault();
+    
     const coords = toCanvasCoords(touch.clientX, touch.clientY);
-    if (!coords) return;
-    setMousePos(coords);
+    if (coords) {
+      setMousePos(coords);
+    }
 
-    if (isDragging) {
+    if (touchStartPosRef.current && touchDragStartRef.current) {
+      // Check if movement exceeds threshold to determine if this is a drag
+      const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
+      const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
+      const moveThreshold = 10; // pixels
+      
+      if (deltaX > moveThreshold || deltaY > moveThreshold) {
+        // User is dragging, start panning
+        if (!isTouchDragging) {
+          setIsTouchDragging(true);
+          clearHover();
+        }
+      }
+    }
+
+    if (isTouchDragging && touchDragStartRef.current) {
       clearHover();
-      updateDrag(coords.x, coords.y);
+      // Calculate delta movement for natural touch direction
+      // When finger moves left, map moves left
+      const deltaX = touch.clientX - touchDragStartRef.current.x;
+      const deltaY = touch.clientY - touchDragStartRef.current.y;
+      
+      // Apply delta directly to offset for natural touch behavior
+      // Dragging left (negative deltaX) moves map left (offset decreases)
+      setOffset((prev) => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY,
+      }));
+      
+      // Update drag start for next move
+      touchDragStartRef.current = { x: touch.clientX, y: touch.clientY };
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    e.preventDefault();
-    endDrag();
+    const touch = e.changedTouches[0];
+    if (!touch) {
+      setIsTouchDragging(false);
+      touchStartPosRef.current = null;
+      touchDragStartRef.current = null;
+      return;
+    }
+    
+    // Check if this was a tap (not a drag)
+    if (touchStartPosRef.current && !isTouchDragging) {
+      const timeDiff = Date.now() - touchStartTimeRef.current;
+      const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
+      const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
+      const tapThreshold = 10; // pixels
+      const tapTimeThreshold = 300; // ms
+      
+      if (timeDiff < tapTimeThreshold && deltaX < tapThreshold && deltaY < tapThreshold) {
+        // This was a tap - trigger hover effect
+        const coords = toCanvasCoords(touch.clientX, touch.clientY);
+        if (coords) {
+          updateHover({ clientX: coords.x, clientY: coords.y, offset });
+        }
+        e.preventDefault();
+      }
+    }
+    
+    setIsTouchDragging(false);
+    touchStartPosRef.current = null;
+    touchDragStartRef.current = null;
   };
 
   const handleTouchCancel = (e: React.TouchEvent) => {
     e.preventDefault();
-    endDrag();
+    setIsTouchDragging(false);
+    touchStartPosRef.current = null;
+    touchDragStartRef.current = null;
   };
 
   const handleWheel = (e: React.WheelEvent) => {

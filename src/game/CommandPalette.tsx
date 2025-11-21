@@ -96,39 +96,47 @@ export const CommandPalette = ({
   const accentRgba = (alpha: number) => hexToRgba(accent, alpha);
 
   // Define available commands
+  const settingsChildren: CommandItem[] = [
+    {
+      id: 'font-size',
+      label: 'Font Size',
+      type: 'action',
+    },
+  ];
+
+  // Only add axis inversion options on desktop
+  if (!isMobile) {
+    settingsChildren.push(
+      {
+        id: 'invert-x',
+        label: `${scrollSettings.invertX ? '✓ ' : ''}Invert X-Axis Scroll`,
+        type: 'action',
+        action: () => onScrollSettingsChange({ ...scrollSettings, invertX: !scrollSettings.invertX }),
+      },
+      {
+        id: 'invert-y',
+        label: `${scrollSettings.invertY ? '✓ ' : ''}Invert Y-Axis Scroll`,
+        type: 'action',
+        action: () => onScrollSettingsChange({ ...scrollSettings, invertY: !scrollSettings.invertY }),
+      },
+      {
+        id: 'invert-both',
+        label: `${scrollSettings.invertX && scrollSettings.invertY ? '✓ ' : ''}Invert Both Axes`,
+        type: 'action',
+        action: () => {
+          const bothInverted = scrollSettings.invertX && scrollSettings.invertY;
+          onScrollSettingsChange({ invertX: !bothInverted, invertY: !bothInverted });
+        },
+      }
+    );
+  }
+
   const commands: CommandItem[] = [
     {
       id: 'settings',
       label: 'Settings',
       type: 'category',
-      children: [
-        {
-          id: 'font-size',
-          label: 'Font Size',
-          type: 'action',
-        },
-        {
-          id: 'invert-x',
-          label: `${scrollSettings.invertX ? '✓ ' : ''}Invert X-Axis Scroll`,
-          type: 'action',
-          action: () => onScrollSettingsChange({ ...scrollSettings, invertX: !scrollSettings.invertX }),
-        },
-        {
-          id: 'invert-y',
-          label: `${scrollSettings.invertY ? '✓ ' : ''}Invert Y-Axis Scroll`,
-          type: 'action',
-          action: () => onScrollSettingsChange({ ...scrollSettings, invertY: !scrollSettings.invertY }),
-        },
-        {
-          id: 'invert-both',
-          label: `${scrollSettings.invertX && scrollSettings.invertY ? '✓ ' : ''}Invert Both Axes`,
-          type: 'action',
-          action: () => {
-            const bothInverted = scrollSettings.invertX && scrollSettings.invertY;
-            onScrollSettingsChange({ invertX: !bothInverted, invertY: !bothInverted });
-          },
-        },
-      ],
+      children: settingsChildren,
     },
   ];
 
@@ -175,16 +183,20 @@ export const CommandPalette = ({
 
   const visibleCommands = getFlattenedCommands();
 
-  // Focus input when opened
+  // Focus input when opened (but not on mobile to prevent keyboard)
   useEffect(() => {
-    if (isOpen && inputRef.current) {
+    if (isOpen && inputRef.current && !isMobile) {
       inputRef.current.focus();
       setSearchQuery('');
       setSelectedIndex(0);
+    } else if (isOpen) {
+      // On mobile, just reset state without focusing
+      setSearchQuery('');
+      setSelectedIndex(0);
     }
-  }, [isOpen]);
+  }, [isOpen, isMobile]);
 
-  // Close when clicking outside without blocking map interactions
+  // Close when clicking/touching outside without blocking map interactions
   useEffect(() => {
     if (!isOpen) return;
 
@@ -199,8 +211,23 @@ export const CommandPalette = ({
       }
     };
 
+    const handleTouchStart = (event: TouchEvent) => {
+      if (!paletteRef.current) return;
+      const targetNode = event.target as Node;
+      if (triggerRef?.current && triggerRef.current.contains(targetNode)) {
+        return;
+      }
+      if (!paletteRef.current.contains(targetNode)) {
+        onClose();
+      }
+    };
+
     document.addEventListener('mousedown', handleMouseDown, true);
-    return () => document.removeEventListener('mousedown', handleMouseDown, true);
+    document.addEventListener('touchstart', handleTouchStart, true);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown, true);
+      document.removeEventListener('touchstart', handleTouchStart, true);
+    };
   }, [isOpen, onClose, triggerRef]);
 
   // Keyboard navigation
