@@ -92,6 +92,7 @@ export const CommandPalette = ({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
   const paletteRef = useRef<HTMLDivElement>(null);
+  const [mobileAnchor, setMobileAnchor] = useState({ bottom: 24, right: 16 });
   const accent = accentColor ?? DEFAULT_ACCENT_COLOR;
   const accentRgba = (alpha: number) => hexToRgba(accent, alpha);
 
@@ -307,6 +308,83 @@ export const CommandPalette = ({
     });
   };
 
+  const renderSearchSection = (placement: 'top' | 'bottom') => (
+    <div
+      style={{
+        padding: '16px',
+        paddingTop: placement === 'bottom' && isMobile ? '12px' : '16px',
+        paddingBottom:
+          placement === 'bottom' && isMobile
+            ? 'calc(12px + env(safe-area-inset-bottom, 0px))'
+            : '16px',
+        borderBottom: !isMobile && placement === 'top' ? `1px solid ${accentRgba(0.3)}` : 'none',
+        borderTop: isMobile && placement === 'bottom' ? `1px solid ${accentRgba(0.3)}` : 'none',
+        backgroundColor: 'transparent',
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Search commands..."
+        style={{
+          width: '100%',
+          padding: '12px 16px',
+          backgroundColor: 'rgba(0, 0, 0, 0.3)',
+          border: `1px solid ${accentRgba(0.4)}`,
+          borderRadius: '6px',
+          color: accent,
+          fontSize: '16px',
+          outline: 'none',
+          fontFamily: 'inherit',
+        }}
+        onFocus={(e) => {
+          e.target.style.border = `1px solid ${accent}`;
+          e.target.style.boxShadow = `0 0 0 2px ${accentRgba(0.2)}`;
+        }}
+        onBlur={(e) => {
+          e.target.style.border = `1px solid ${accentRgba(0.4)}`;
+          e.target.style.boxShadow = 'none';
+        }}
+      />
+    </div>
+  );
+
+  useEffect(() => {
+    if (!isMobile || typeof window === 'undefined') return;
+
+    const updateAnchor = () => {
+      if (!triggerRef?.current) {
+        setMobileAnchor({ bottom: 24, right: 16 });
+        return;
+      }
+
+      const rect = triggerRef.current.getBoundingClientRect();
+      const gap = 12;
+      const minMargin = 12;
+
+      setMobileAnchor({
+        bottom: Math.max(window.innerHeight - rect.top + gap, minMargin),
+        right: Math.max(window.innerWidth - rect.right, minMargin),
+      });
+    };
+
+    updateAnchor();
+
+    if (!isOpen) {
+      return;
+    }
+
+    window.addEventListener('resize', updateAnchor);
+    window.addEventListener('scroll', updateAnchor, true);
+
+    return () => {
+      window.removeEventListener('resize', updateAnchor);
+      window.removeEventListener('scroll', updateAnchor, true);
+    };
+  }, [isMobile, isOpen, triggerRef]);
+
   if (!isOpen) return null;
 
   return (
@@ -316,56 +394,34 @@ export const CommandPalette = ({
         ref={paletteRef}
         style={{
           position: 'fixed',
-          top: isMobile ? '10px' : '80px',
-          right: isMobile ? '10px' : '20px',
-          left: isMobile ? '10px' : 'auto',
-          width: isMobile ? 'auto' : '500px',
-          maxWidth: isMobile ? '100%' : '500px',
-          maxHeight: isMobile ? 'calc(100vh - 80px)' : '500px',
+          top: isMobile ? 'auto' : '80px',
+          bottom: isMobile ? `${mobileAnchor.bottom}px` : 'auto',
+          right: isMobile ? `${mobileAnchor.right}px` : '20px',
+          left: 'auto',
+          width: isMobile ? 'min(520px, calc(100% - 32px))' : '500px',
+          maxWidth: isMobile ? 'min(520px, calc(100% - 32px))' : '500px',
+          maxHeight: isMobile ? '70vh' : '500px',
           backgroundColor: 'rgba(20, 10, 15, 0.95)',
           border: `2px solid ${accent}`,
-          borderRadius: '8px',
-          boxShadow: `0 8px 32px ${accentRgba(0.3)}, 0 0 60px ${accentRgba(0.15)}`,
+          borderRadius: isMobile ? '12px' : '8px',
+          boxShadow: isMobile
+            ? `0 -8px 32px ${accentRgba(0.25)}, 0 -2px 20px ${accentRgba(0.2)}`
+            : `0 8px 32px ${accentRgba(0.3)}, 0 0 60px ${accentRgba(0.15)}`,
           overflow: 'hidden',
           zIndex: 1000,
           animation: 'commandPaletteSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          transformOrigin: isMobile ? 'top center' : 'top right',
+          transformOrigin: isMobile ? 'bottom right' : 'top right',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        {/* Search Input */}
-        <div style={{ padding: '16px', borderBottom: `1px solid ${accentRgba(0.3)}` }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search commands..."
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              backgroundColor: 'rgba(0, 0, 0, 0.3)',
-              border: `1px solid ${accentRgba(0.4)}`,
-              borderRadius: '6px',
-              color: accent,
-              fontSize: '16px',
-              outline: 'none',
-              fontFamily: 'inherit',
-            }}
-            onFocus={(e) => {
-              e.target.style.border = `1px solid ${accent}`;
-              e.target.style.boxShadow = `0 0 0 2px ${accentRgba(0.2)}`;
-            }}
-            onBlur={(e) => {
-              e.target.style.border = `1px solid ${accentRgba(0.4)}`;
-              e.target.style.boxShadow = 'none';
-            }}
-          />
-        </div>
+        {!isMobile && renderSearchSection('top')}
 
         {/* Command List */}
         <div
           style={{
-            maxHeight: isMobile ? 'calc(100vh - 200px)' : '400px',
+            flex: isMobile ? 1 : undefined,
+            maxHeight: isMobile ? '50vh' : '400px',
             overflowY: 'auto',
             overflowX: 'hidden',
           }}
@@ -400,9 +456,6 @@ export const CommandPalette = ({
                   backgroundColor: index === selectedIndex 
                     ? accentRgba(0.2) 
                     : 'transparent',
-                  borderLeft: index === selectedIndex 
-                    ? `3px solid ${accent}` 
-                    : '3px solid transparent',
                   color: index === selectedIndex ? accent : accentRgba(0.8),
                   fontSize: '14px',
                   display: 'flex',
@@ -419,7 +472,7 @@ export const CommandPalette = ({
                     style={{
                       fontSize: '12px',
                       color: accentRgba(0.6),
-                      transform: expandedCategories.has(cmd.id) ? 'rotate(-90deg)' : 'rotate(0deg)',
+                      transform: expandedCategories.has(cmd.id) ? 'rotate(90deg)' : 'rotate(0deg)',
                       transition: 'transform 0.2s ease',
                     }}
                   >
@@ -460,6 +513,8 @@ export const CommandPalette = ({
             ))
           )}
         </div>
+
+        {isMobile && renderSearchSection('bottom')}
 
         {/* Footer with shortcuts hint - hidden on mobile */}
         {!isMobile && (

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Point {
   x: number;
@@ -21,9 +21,14 @@ export const useDragPan = (initialOffset: Point) => {
     offsetX: initialOffset.x,
     offsetY: initialOffset.y,
   });
+  const animationFrameRef = useRef<number | null>(null);
 
   const beginDrag = useCallback(
     (clientX: number, clientY: number) => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
       dragStartRef.current = {
         pointerX: clientX,
         pointerY: clientY,
@@ -41,16 +46,41 @@ export const useDragPan = (initialOffset: Point) => {
       const { pointerX, pointerY, offsetX, offsetY } = dragStartRef.current;
       const deltaX = clientX - pointerX;
       const deltaY = clientY - pointerY;
-      setOffset({
-        x: offsetX - deltaX,
-        y: offsetY - deltaY,
-      });
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+
+      const applyOffset = () => {
+        setOffset({
+          x: offsetX - deltaX,
+          y: offsetY - deltaY,
+        });
+        animationFrameRef.current = null;
+      };
+
+      if (typeof requestAnimationFrame === 'function') {
+        animationFrameRef.current = requestAnimationFrame(applyOffset);
+      } else {
+        applyOffset();
+      }
     },
     [isDragging]
   );
 
   const endDrag = useCallback(() => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
     setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, []);
 
   const nudgeOffset = useCallback((deltaX: number, deltaY: number) => {
@@ -70,4 +100,3 @@ export const useDragPan = (initialOffset: Point) => {
     nudgeOffset,
   };
 };
-

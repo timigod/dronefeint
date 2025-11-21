@@ -1,3 +1,6 @@
+import type { FontSizeOption } from './utils/fontSize';
+import { getResponsiveFontValue } from './utils/fontSize';
+
 // Structure types for the game
 export type StructureType = 'hq' | 'foundry' | 'reactor' | 'extractor';
 
@@ -673,7 +676,8 @@ export function drawDroneCount(
   structure: Structure,
   offsetX: number = 0,
   offsetY: number = 0,
-  fontSize: 'small' | 'medium' | 'large' = 'small'
+  fontSize: FontSizeOption = 'small',
+  isMobile: boolean = false
 ) {
   if (structure.droneCount === undefined || structure.droneCount === 0) return;
 
@@ -697,16 +701,17 @@ export function drawDroneCount(
   const text = `${structure.droneCount}`;
   
   // Map fontSize to scale values
-  const scaleMap = {
+  const scaleMap: Record<FontSizeOption, number> = {
     small: 1.5,
     medium: 1.8,
     large: 2.1
   };
+  const responsiveScale = getResponsiveFontValue(fontSize, scaleMap, isMobile);
   
   if (useGoogleFont) {
     // Use Google Font rendering (canvas text)
     const baseFontSize = 11;
-    const fontSizeMultiplier = scaleMap[fontSize] / 1.5; // relative to base scale
+    const fontSizeMultiplier = responsiveScale / 1.5; // relative to base scale
     const actualFontSize = baseFontSize * fontSizeMultiplier;
     ctx.font = `700 ${actualFontSize}px 'Orbitron', monospace`;
     ctx.textBaseline = 'top';
@@ -740,7 +745,7 @@ export function drawDroneCount(
     ctx.shadowBlur = 0;
   } else {
     // Use custom geometric rendering (scale based on fontSize setting)
-    const scale = scaleMap[fontSize];
+    const scale = responsiveScale;
     const textHeight = 7 * scale;
     const charWidth = 6 * scale; // 5px + 1px spacing
     const textWidth = text.length * charWidth;

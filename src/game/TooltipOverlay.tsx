@@ -1,15 +1,16 @@
 import { useEffect, useRef } from 'react';
 import type { Structure } from './structures';
 import { GLYPH_HEIGHT, drawGlyphText, measureGlyphText } from './glyphs';
-
-type FontSize = 'small' | 'medium' | 'large';
+import type { FontSizeOption } from './utils/fontSize';
+import { getResponsiveFontValue } from './utils/fontSize';
 
 interface TooltipOverlayProps {
   hoveredStructure: Structure | null;
   mousePos: { x: number; y: number };
-  fontSize: FontSize;
+  fontSize: FontSizeOption;
   viewportWidth: number;
   viewportHeight: number;
+  isMobile: boolean;
 }
 
 export const TooltipOverlay = ({
@@ -18,6 +19,7 @@ export const TooltipOverlay = ({
   fontSize,
   viewportWidth,
   viewportHeight,
+  isMobile,
 }: TooltipOverlayProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -61,12 +63,12 @@ export const TooltipOverlay = ({
       lines.push(`+${droneGenerationRate}/MIN`);
     }
 
-    const tooltipScaleMap: Record<FontSize, number> = {
+    const tooltipScaleMap: Record<FontSizeOption, number> = {
       small: 1.7,
       medium: 2.0,
       large: 2.3,
     };
-    const scale = tooltipScaleMap[fontSize];
+    const scale = getResponsiveFontValue(fontSize, tooltipScaleMap, isMobile);
     const padding = 6;
     const lineHeight = (GLYPH_HEIGHT + 3) * scale;
     const lineWidths = lines.map((line) => measureGlyphText(line, scale));
@@ -114,7 +116,7 @@ export const TooltipOverlay = ({
         currentY += lineHeight;
       }
     });
-  }, [fontSize, hoveredStructure, mousePos, viewportHeight, viewportWidth]);
+  }, [fontSize, hoveredStructure, isMobile, mousePos, viewportHeight, viewportWidth]);
 
   return (
     <canvas

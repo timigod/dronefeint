@@ -17,6 +17,8 @@ import { wrap } from './utils/math';
 import { drawGlyphText, measureGlyphText, GLYPH_HEIGHT } from './glyphs';
 import { generateStartingScenario, Player } from './scenarios/startingScenario';
 import { DevFairnessOverlay } from './DevFairnessOverlay';
+import type { FontSizeOption } from './utils/fontSize';
+import { getResponsiveFontValue } from './utils/fontSize';
 
 const VIEWPORT_SCALE = 0.75;
 
@@ -46,6 +48,17 @@ const isMobileDevice = () => {
   if (typeof window === 'undefined') return false;
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
          window.innerWidth <= 768;
+};
+
+const FONT_SIZE_STORAGE_KEY = 'dronefeint-font-size';
+const DEFAULT_FONT_SIZE: FontSizeOption = 'small';
+
+const getStoredFontSize = (): FontSizeOption => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_FONT_SIZE;
+  }
+  const stored = window.localStorage.getItem(FONT_SIZE_STORAGE_KEY);
+  return stored === 'small' || stored === 'medium' || stored === 'large' ? stored : DEFAULT_FONT_SIZE;
 };
 
 const getStructureClusterCenter = (structures: Structure[]) => {
@@ -107,7 +120,18 @@ export const Map = () => {
   const { hoveredStructure, updateHover, clearHover } = useStructureHover(structures);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [scrollSettings, setScrollSettings] = useState({ invertX: false, invertY: false });
-  const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('small');
+  const [fontSize, setFontSizeState] = useState<FontSizeOption>(() => {
+    if (typeof window === 'undefined') {
+      return DEFAULT_FONT_SIZE;
+    }
+    return getStoredFontSize();
+  });
+  const setFontSize = useCallback((next: FontSizeOption) => {
+    setFontSizeState(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, next);
+    }
+  }, []);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [animationTime, setAnimationTime] = useState(0);
   const isReady = terrainReady && waterReady && minimapReady;
@@ -389,11 +413,16 @@ export const Map = () => {
             structure,
             -wrappedOffsetX + tileOffsetX,
             -wrappedOffsetY + tileOffsetY,
-            fontSize
+            fontSize,
+            isMobile
           );
           // Draw outpost label (glyphs) above
           if (structure.label) {
-            const labelScaleMap = { small: 1.35, medium: 1.6, large: 1.85 } as const;
+            const labelScaleMap: Record<FontSizeOption, number> = {
+              small: 1.35,
+              medium: 1.6,
+              large: 1.85,
+            };
             const labelSpacingMap: Record<Structure['type'], number> = {
               hq: 12,
               foundry: 12,
@@ -406,7 +435,7 @@ export const Map = () => {
               reactor: 1,
               extractor: 1,
             };
-            const scale = labelScaleMap[fontSize];
+            const scale = getResponsiveFontValue(fontSize, labelScaleMap, isMobile);
             const spacing = labelSpacingMap[structure.type] ?? 10;
             const anchorMultiplier = labelAnchorMultiplierMap[structure.type] ?? 1;
             const anchorOffset = structure.size * anchorMultiplier;
@@ -478,14 +507,16 @@ export const Map = () => {
 
   const touchStartPosRef = useRef<{ x: number; y: number; offset: { x: number; y: number } } | null>(null);
   const touchStartTimeRef = useRef<number>(0);
-  const touchDragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const [isTouchDragging, setIsTouchDragging] = useState(false);
+  const touchCanvasStartRef = useRef<{ x: number; y: number } | null>(null);
+  const isTouchDraggingRef = useRef(false);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
     if (!touch) return;
     
     e.preventDefault();
+
+    const coords = toCanvasCoords(touch.clientX, touch.clientY);
     
     // Store initial touch position and time for tap detection
     touchStartPosRef.current = {
@@ -493,13 +524,12 @@ export const Map = () => {
       y: touch.clientY,
       offset: { ...offset },
     };
+    touchCanvasStartRef.current = coords ? { x: coords.x, y: coords.y } : null;
     touchStartTimeRef.current = Date.now();
+    isTouchDraggingRef.current = false;
     
     // Always clear hover on touch start - we'll show it on touch end if it was a tap
     clearHover();
-    
-    // Prepare for dragging - we'll determine if it's actually a drag in touchMove
-    touchDragStartRef.current = { x: touch.clientX, y: touch.clientY };
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -513,54 +543,41 @@ export const Map = () => {
       setMousePos(coords);
     }
 
-    if (touchStartPosRef.current && touchDragStartRef.current) {
-      // Check if movement exceeds threshold to determine if this is a drag
-      const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
-      const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
-      const moveThreshold = 10; // pixels
-      
-      if (deltaX > moveThreshold || deltaY > moveThreshold) {
-        // User is dragging, start panning
-        if (!isTouchDragging) {
-          setIsTouchDragging(true);
-          clearHover();
-        }
+    const start = touchStartPosRef.current;
+    const moveThreshold = 10; // pixels
+    const exceededThreshold =
+      start && (Math.abs(touch.clientX - start.x) > moveThreshold || Math.abs(touch.clientY - start.y) > moveThreshold);
+
+    if (!isTouchDraggingRef.current && exceededThreshold) {
+      isTouchDraggingRef.current = true;
+      clearHover();
+      const startCoords = touchCanvasStartRef.current ?? coords;
+      if (startCoords) {
+        beginDrag(startCoords.x, startCoords.y);
       }
     }
 
-    if (isTouchDragging && touchDragStartRef.current) {
-      clearHover();
-      // Calculate delta movement for natural touch direction
-      // When finger moves left, map moves left
-      const deltaX = touch.clientX - touchDragStartRef.current.x;
-      const deltaY = touch.clientY - touchDragStartRef.current.y;
-      
-      // Apply delta directly to offset for natural touch behavior
-      // Dragging left (negative deltaX) moves map left (offset decreases)
-      setOffset((prev) => ({
-        x: prev.x + deltaX,
-        y: prev.y + deltaY,
-      }));
-      
-      // Update drag start for next move
-      touchDragStartRef.current = { x: touch.clientX, y: touch.clientY };
+    if (isTouchDraggingRef.current && coords) {
+      updateDrag(coords.x, coords.y);
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     const touch = e.changedTouches[0];
-    if (!touch) {
-      setIsTouchDragging(false);
+    const start = touchStartPosRef.current;
+    if (!touch || !start) {
+      isTouchDraggingRef.current = false;
       touchStartPosRef.current = null;
-      touchDragStartRef.current = null;
+      touchCanvasStartRef.current = null;
+      endDrag();
       return;
     }
     
     // Check if this was a tap (not a drag)
-    if (touchStartPosRef.current && !isTouchDragging) {
+    if (!isTouchDraggingRef.current) {
       const timeDiff = Date.now() - touchStartTimeRef.current;
-      const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
-      const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
+      const deltaX = Math.abs(touch.clientX - start.x);
+      const deltaY = Math.abs(touch.clientY - start.y);
       const tapThreshold = 10; // pixels
       const tapTimeThreshold = 300; // ms
       
@@ -574,16 +591,18 @@ export const Map = () => {
       }
     }
     
-    setIsTouchDragging(false);
+    isTouchDraggingRef.current = false;
     touchStartPosRef.current = null;
-    touchDragStartRef.current = null;
+    touchCanvasStartRef.current = null;
+    endDrag();
   };
 
   const handleTouchCancel = (e: React.TouchEvent) => {
     e.preventDefault();
-    setIsTouchDragging(false);
+    isTouchDraggingRef.current = false;
     touchStartPosRef.current = null;
-    touchDragStartRef.current = null;
+    touchCanvasStartRef.current = null;
+    endDrag();
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -694,6 +713,7 @@ export const Map = () => {
         fontSize={fontSize}
         viewportWidth={viewportWidth}
         viewportHeight={viewportHeight}
+        isMobile={isMobile}
       />
       {!isMobile && (
         <Minimap
@@ -714,7 +734,8 @@ export const Map = () => {
       onClick={() => setIsCommandPaletteOpen((prev) => !prev)}
       style={{
         position: 'absolute',
-        top: '20px',
+        top: isMobile ? 'auto' : '20px',
+        bottom: isMobile ? 'calc(20px + env(safe-area-inset-bottom, 0px))' : 'auto',
         right: '20px',
         width: '44px',
         height: '44px',
@@ -728,7 +749,7 @@ export const Map = () => {
         boxShadow: `0 4px 12px ${accentColor}55`,
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         transform: isCommandPaletteOpen ? 'rotate(-90deg)' : 'rotate(0deg)',
-        zIndex: 100,
+        zIndex: 120,
       }}
       onMouseEnter={(e) => {
         if (!isCommandPaletteOpen) {
