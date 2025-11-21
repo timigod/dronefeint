@@ -30,8 +30,12 @@ export const getViewportSize = (): ViewportSize => {
     return { width: fallbackWidth, height: fallbackHeight };
   }
 
+  const visual = window.visualViewport;
+  const width = visual?.width ?? window.innerWidth;
+  const height = visual?.height ?? window.innerHeight;
+
   return {
-    width: Math.max(1, Math.round(window.innerWidth * scale)),
-    height: Math.max(1, Math.round(window.innerHeight * scale)),
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
   };
 };

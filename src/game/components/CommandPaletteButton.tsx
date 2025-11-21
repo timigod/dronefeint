@@ -16,10 +16,10 @@ export const CommandPaletteButton = ({
   isMobile,
 }: CommandPaletteButtonProps) => {
   const baseStyle: React.CSSProperties = {
-    position: 'absolute',
+    position: isMobile ? 'fixed' : 'absolute',
     top: isMobile ? 'auto' : '20px',
-    bottom: isMobile ? 'calc(28px + env(safe-area-inset-bottom, 0px))' : 'auto',
-    right: '20px',
+    bottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 36px)' : 'auto',
+    right: isMobile ? 'calc(env(safe-area-inset-right, 0px) + 16px)' : '20px',
     width: '44px',
     height: '44px',
     backgroundColor: 'rgba(20, 10, 15, 0.8)',
