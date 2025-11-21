@@ -19,7 +19,7 @@ import type { Player } from './scenarios/startingScenario';
 import { generateStartingScenario } from './scenarios/startingScenario';
 import type { Structure } from './structures';
 import { getStructureClusterCenter } from './utils/structures';
-import { isMobileDevice } from './utils/viewport';
+import { getViewportScale, isMobileDevice } from './utils/viewport';
 import { generateLandmasses } from './worldgen/landmasses';
 
 export const Map = () => {
@@ -71,6 +71,9 @@ export const Map = () => {
   const { viewportSize, viewportSizeRef } = useViewportSize({ onViewportChange: centerMapOnResize });
   const viewportWidth = viewportSize.width;
   const viewportHeight = viewportSize.height;
+  const viewportScale = getViewportScale();
+  const displayWidth = viewportWidth / viewportScale;
+  const displayHeight = viewportHeight / viewportScale;
 
   const landmasses = useMemo(() => generateLandmasses(), []);
   const {
@@ -212,8 +215,8 @@ export const Map = () => {
           position: 'absolute',
           top: 0,
           left: 0,
-          width: '100%',
-          height: '100%',
+          width: `${displayWidth}px`,
+          height: `${displayHeight}px`,
           zIndex: 1,
           touchAction: 'none',
         }}
@@ -224,8 +227,8 @@ export const Map = () => {
           position: 'absolute',
           top: 0,
           left: 0,
-          width: '100%',
-          height: '100%',
+          width: `${displayWidth}px`,
+          height: `${displayHeight}px`,
           pointerEvents: 'none',
           zIndex: 2,
         }}
@@ -236,8 +239,8 @@ export const Map = () => {
           position: 'absolute',
           top: 0,
           left: 0,
-          width: '100%',
-          height: '100%',
+          width: `${displayWidth}px`,
+          height: `${displayHeight}px`,
           pointerEvents: 'none',
           zIndex: 3,
         }}
@@ -248,6 +251,8 @@ export const Map = () => {
         fontSize={fontSize}
         viewportWidth={viewportWidth}
         viewportHeight={viewportHeight}
+        displayWidth={displayWidth}
+        displayHeight={displayHeight}
         isMobile={isMobile}
       />
       {!isMobile && (

@@ -10,6 +10,8 @@ interface TooltipOverlayProps {
   fontSize: FontSizeOption;
   viewportWidth: number;
   viewportHeight: number;
+  displayWidth?: number;
+  displayHeight?: number;
   isMobile: boolean;
 }
 
@@ -19,6 +21,8 @@ export const TooltipOverlay = ({
   fontSize,
   viewportWidth,
   viewportHeight,
+  displayWidth,
+  displayHeight,
   isMobile,
 }: TooltipOverlayProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -125,8 +129,8 @@ export const TooltipOverlay = ({
         position: 'absolute',
         top: 0,
         left: 0,
-        width: '100%',
-        height: '100%',
+        width: displayWidth ? `${displayWidth}px` : '100%',
+        height: displayHeight ? `${displayHeight}px` : '100%',
         pointerEvents: 'none',
         zIndex: 4,
       }}
