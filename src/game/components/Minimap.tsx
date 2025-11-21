@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, MouseEventHandler, TouchEventHandler } from 'react';
-import type { Structure } from './structures';
+import type { Structure } from '../structures';
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
@@ -8,8 +8,8 @@ import {
   MINIMAP_TEXTURE_HEIGHT,
   MINIMAP_TEXTURE_WIDTH,
   MINIMAP_WIDTH,
-} from './mapConstants';
-import { wrap } from './utils/math';
+} from '../mapConstants';
+import { wrap } from '../utils/math';
 
 export interface MinimapProps {
   structures: Structure[];

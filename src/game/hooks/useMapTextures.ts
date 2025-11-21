@@ -165,4 +165,3 @@ export const useMapTextures = (landmasses: Landmass[]): MapTexturesResult => {
     minimapReady,
   };
 };
-

@@ -4,8 +4,8 @@ import {
   buildFairnessNarrative,
   evaluateFairnessChecks,
   runFairnessSamples,
-} from './scenarios/fairnessReport';
-import type { FairnessSummary, FairnessThresholds } from './scenarios/fairnessReport';
+} from '../scenarios/fairnessReport';
+import type { FairnessSummary, FairnessThresholds } from '../scenarios/fairnessReport';
 
 const DEFAULT_SAMPLE_SIZE = Number(import.meta.env.VITE_DEV_FAIRNESS_SAMPLE_SIZE ?? '50');
 
@@ -384,5 +384,4 @@ export const DevFairnessOverlay = () => {
     </div>
   );
 };
-
 

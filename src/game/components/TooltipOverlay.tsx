@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import type { Structure } from './structures';
-import { GLYPH_HEIGHT, drawGlyphText, measureGlyphText } from './glyphs';
-import type { FontSizeOption } from './utils/fontSize';
-import { getResponsiveFontValue } from './utils/fontSize';
+import type { Structure } from '../structures';
+import { GLYPH_HEIGHT, drawGlyphText, measureGlyphText } from '../glyphs';
+import type { FontSizeOption } from '../utils/fontSize';
+import { getResponsiveFontValue } from '../utils/fontSize';
 
 interface TooltipOverlayProps {
   hoveredStructure: Structure | null;
@@ -133,4 +133,3 @@ export const TooltipOverlay = ({
     />
   );
 };
-
