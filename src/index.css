@@ -6,6 +6,10 @@
 
 html {
   background-color: #050505;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -19,8 +23,21 @@ body {
   margin: 0;
   padding: 0;
   /* Ensure body fills the viewport including safe areas */
+  width: 100%;
+  height: 100%;
   min-height: 100vh;
   min-height: -webkit-fill-available;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  scrollbar-width: none;
+}
+
+body::-webkit-scrollbar {
+  display: none;
 }
 
 #root {
@@ -29,6 +46,26 @@ body {
   /* Support for safe area insets */
   height: -webkit-fill-available;
   background-color: #050505;
+  user-select: inherit;
+  scrollbar-width: none;
+}
+
+#root::-webkit-scrollbar {
+  display: none;
+}
+
+/* Remove tap highlight on touch devices to avoid blue flash */
+*, *::before, *::after {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
 }
 
 .map-loading-overlay {
@@ -61,4 +98,3 @@ body {
     transform: translateY(0) scale(1);
   }
 }
-

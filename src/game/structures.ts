@@ -17,6 +17,7 @@ export interface Structure {
   droneCapacity?: number; // Maximum drone capacity
   droneGenerationRate?: number; // Drones generated per minute (foundries only)
   useGoogleFont?: boolean; // Use Google Font instead of geometric rendering
+  cacheVersion?: number; // bump to force sprite cache refresh when data changes
 }
 
 // Bayer matrix for dithering
@@ -769,4 +770,3 @@ export function drawDroneCount(
     drawText(ctx, text, textX, textY, r, g, b, scale);
   }
 }
-

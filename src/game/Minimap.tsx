@@ -102,7 +102,6 @@ export const Minimap = ({
   };
 
   const handleTouchStart: TouchEventHandler<HTMLCanvasElement> = (event) => {
-    event.preventDefault();
     const touch = event.touches[0];
     if (!touch) return;
     handlePointerDown(touch.clientX, touch.clientY);
@@ -110,7 +109,6 @@ export const Minimap = ({
 
   const handleTouchMove: TouchEventHandler<HTMLCanvasElement> = (event) => {
     if (!isPanning) return;
-    event.preventDefault();
     const touch = event.touches[0];
     if (!touch) return;
     handlePointerMove(touch.clientX, touch.clientY);
@@ -247,9 +245,9 @@ export const Minimap = ({
         height: `${MINIMAP_HEIGHT}px`,
         cursor: 'pointer',
         zIndex: 5,
+        touchAction: 'none',
         ...style,
       }}
     />
   );
 };
-

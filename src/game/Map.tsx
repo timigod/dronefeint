@@ -20,13 +20,13 @@ import { DevFairnessOverlay } from './DevFairnessOverlay';
 import type { FontSizeOption } from './utils/fontSize';
 import { getResponsiveFontValue } from './utils/fontSize';
 
-const VIEWPORT_SCALE = 0.75;
+const VIEWPORT_SCALE = 1;
 
 const getViewportScale = () => {
   if (typeof window === 'undefined') {
     return VIEWPORT_SCALE;
   }
-  return isMobileDevice() ? VIEWPORT_SCALE * 2 : VIEWPORT_SCALE;
+  return VIEWPORT_SCALE;
 };
 
 const getViewportSize = () => {
@@ -141,6 +141,7 @@ export const Map = () => {
   const gridDirtyRef = useRef(true);
   const structuresDirtyRef = useRef(true);
   const lastStructuresDrawRef = useRef(0);
+  const gridPatternRef = useRef<CanvasPattern | null>(null);
   const commandPaletteButtonRef = useRef<HTMLButtonElement | null>(null);
   const [isFairnessOverlayVisible, setFairnessOverlayVisible] = useState(() => {
     if (!import.meta.env.DEV) return false;
@@ -298,8 +299,8 @@ export const Map = () => {
     return (
       <div
         style={{
-          width: '100vw',
-          height: '100vh',
+        width: viewportWidth || '100vw',
+        height: viewportHeight || '100vh',
           backgroundColor: '#050505',
           color: '#ff6b7a',
           display: 'flex',
@@ -370,25 +371,30 @@ export const Map = () => {
 
     ctx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
 
+    if (!gridPatternRef.current) {
+      const tile = document.createElement('canvas');
+      tile.width = GRID_SIZE;
+      tile.height = GRID_SIZE;
+      const tileCtx = tile.getContext('2d');
+      if (!tileCtx) return;
+      tileCtx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+      tileCtx.fillRect(0, 0, 1, GRID_SIZE);
+      tileCtx.fillRect(0, 0, GRID_SIZE, 1);
+      gridPatternRef.current = ctx.createPattern(tile, 'repeat');
+    }
+
     const wrappedOffsetX = wrap(offsetRef.current.x, MAP_WIDTH);
     const wrappedOffsetY = wrap(offsetRef.current.y, MAP_HEIGHT);
+    const translateX = -(wrappedOffsetX % GRID_SIZE);
+    const translateY = -(wrappedOffsetY % GRID_SIZE);
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-    ctx.lineWidth = 1;
-
-    for (let x = -(wrappedOffsetX % GRID_SIZE); x < gridCanvas.width; x += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, gridCanvas.height);
-      ctx.stroke();
+    ctx.save();
+    ctx.translate(translateX, translateY);
+    if (gridPatternRef.current) {
+      ctx.fillStyle = gridPatternRef.current;
+      ctx.fillRect(-translateX, -translateY, gridCanvas.width, gridCanvas.height);
     }
-
-    for (let y = -(wrappedOffsetY % GRID_SIZE); y < gridCanvas.height; y += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(gridCanvas.width, y);
-      ctx.stroke();
-    }
+    ctx.restore();
   }, []);
 
   const drawStructures = useCallback(
@@ -443,6 +449,7 @@ export const Map = () => {
               fontSizeRef.current,
               isMobile
             );
+
             if (structure.label) {
               const labelScaleMap: Record<FontSizeOption, number> = {
                 small: 1.35,
@@ -566,9 +573,6 @@ export const Map = () => {
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
     if (!touch) return;
-    
-    e.preventDefault();
-
     const coords = toCanvasCoords(touch.clientX, touch.clientY);
     
     // Store initial touch position and time for tap detection
@@ -589,9 +593,6 @@ export const Map = () => {
   const handleTouchMove = (e: React.TouchEvent) => {
     const touch = e.touches[0];
     if (!touch) return;
-    
-    e.preventDefault();
-    
     const coords = toCanvasCoords(touch.clientX, touch.clientY);
     if (coords) {
       setMousePos(coords);
@@ -617,6 +618,7 @@ export const Map = () => {
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
     const touch = e.changedTouches[0];
     const start = touchStartPosRef.current;
     if (!touch || !start) {
@@ -650,7 +652,6 @@ export const Map = () => {
             touchLastHoveredRef.current = tappedStructure ?? null;
           }
         }
-        e.preventDefault();
       }
     }
     
@@ -660,8 +661,9 @@ export const Map = () => {
     endDrag();
   };
 
-  const handleTouchCancel = (e: React.TouchEvent) => {
-    e.preventDefault();
+  const handleTouchCancel = () => {
+    // Keep behavior consistent with touch end, prevent default browser highlights
+    // and fully reset drag state.
     isTouchDraggingRef.current = false;
     touchStartPosRef.current = null;
     touchCanvasStartRef.current = null;
@@ -685,39 +687,12 @@ export const Map = () => {
       style={{
         width: '100vw',
         height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
+        overflow: 'hidden',
+        cursor: isDragging ? 'grabbing' : hoveredStructure ? 'pointer' : 'grab',
+        position: 'relative',
+        backgroundColor: '#050505',
       }}
     >
-      {/* Mobile Notice Banner - Takes up space at top */}
-      {isMobile && (
-        <div
-          style={{
-            padding: '8px 16px',
-            backgroundColor: 'rgba(8, 8, 12, 0.94)',
-            borderBottom: '1px solid rgba(255,255,255,0.15)',
-            color: '#9ea7c4',
-            fontSize: '12px',
-            fontFamily: 'IBM Plex Mono, Menlo, monospace',
-            textAlign: 'center',
-            pointerEvents: 'none',
-            letterSpacing: '0.03em',
-            flexShrink: 0,
-          }}
-        >
-          Not yet optimized for mobile devices
-        </div>
-      )}
-      <div
-        style={{
-          overflow: 'hidden',
-          width: '100%',
-          flex: 1,
-          cursor: isDragging ? 'grabbing' : hoveredStructure ? 'pointer' : 'grab',
-          position: 'relative',
-          backgroundColor: '#050505',
-        }}
-      >
       {!isReady && (
         <div className="map-loading-overlay">
           <div className="map-loading-panel">
@@ -811,7 +786,11 @@ export const Map = () => {
         justifyContent: 'center',
         boxShadow: `0 4px 12px ${accentColor}55`,
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        transform: isCommandPaletteOpen ? 'rotate(-90deg)' : 'rotate(0deg)',
+        transform: isCommandPaletteOpen
+          ? isMobile
+            ? 'rotate(90deg)'
+            : 'rotate(-90deg)'
+          : 'rotate(0deg)',
         zIndex: 120,
       }}
       onMouseEnter={(e) => {
@@ -905,7 +884,6 @@ export const Map = () => {
           );
         })}
       </div>
-    </div>
     </div>
   );
 };
