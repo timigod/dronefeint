@@ -15,6 +15,7 @@ interface DragState {
 export const useDragPan = (initialOffset: Point) => {
   const [offset, setOffset] = useState<Point>(initialOffset);
   const [isDragging, setIsDragging] = useState(false);
+  const [isMomentum, setIsMomentum] = useState(false);
   const dragStartRef = useRef<DragState>({
     pointerX: 0,
     pointerY: 0,
@@ -32,6 +33,7 @@ export const useDragPan = (initialOffset: Point) => {
       if (momentumFrameRef.current !== null) {
         cancelAnimationFrame(momentumFrameRef.current);
         momentumFrameRef.current = null;
+        setIsMomentum(false);
       }
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -47,6 +49,7 @@ export const useDragPan = (initialOffset: Point) => {
       velocityRef.current = { x: 0, y: 0 };
       lastTimeRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now();
       setIsDragging(true);
+      setIsMomentum(false);
     },
     [offset.x, offset.y]
   );
@@ -107,9 +110,11 @@ export const useDragPan = (initialOffset: Point) => {
         velocityRef.current = { x: 0, y: 0 };
         lastDeltaRef.current = { x: 0, y: 0 };
         lastTimeRef.current = null;
+        setIsMomentum(false);
         return;
       }
 
+      setIsMomentum(true);
       const friction = 0.0035; // exponential friction for decay
       const step = (prevTime: number) => {
         const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -135,6 +140,7 @@ export const useDragPan = (initialOffset: Point) => {
           momentumFrameRef.current = null;
           lastDeltaRef.current = { x: 0, y: 0 };
           lastTimeRef.current = null;
+          setIsMomentum(false);
           return;
         }
 
@@ -172,6 +178,7 @@ export const useDragPan = (initialOffset: Point) => {
     offset,
     setOffset,
     isDragging,
+    isMomentum,
     beginDrag,
     updateDrag,
     endDrag,

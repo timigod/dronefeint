@@ -103,6 +103,7 @@ export const Map = () => {
     offset,
     setOffset,
     isDragging,
+    isMomentum,
     beginDrag,
     updateDrag,
     endDrag,
@@ -133,8 +134,13 @@ export const Map = () => {
     }
   }, []);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [animationTime, setAnimationTime] = useState(0);
+  const offsetRef = useRef(offset);
+  const fontSizeRef = useRef(fontSize);
   const isReady = terrainReady && waterReady && minimapReady;
+  const terrainDirtyRef = useRef(true);
+  const gridDirtyRef = useRef(true);
+  const structuresDirtyRef = useRef(true);
+  const lastStructuresDrawRef = useRef(0);
   const commandPaletteButtonRef = useRef<HTMLButtonElement | null>(null);
   const [isFairnessOverlayVisible, setFairnessOverlayVisible] = useState(() => {
     if (!import.meta.env.DEV) return false;
@@ -220,6 +226,34 @@ export const Map = () => {
     recenterOnActivePlayer();
   }, [recenterOnActivePlayer]);
 
+  useEffect(() => {
+    offsetRef.current = offset;
+    terrainDirtyRef.current = true;
+    gridDirtyRef.current = true;
+    structuresDirtyRef.current = true;
+  }, [offset]);
+
+  useEffect(() => {
+    fontSizeRef.current = fontSize;
+    structuresDirtyRef.current = true;
+  }, [fontSize]);
+
+  useEffect(() => {
+    terrainDirtyRef.current = true;
+    gridDirtyRef.current = true;
+    structuresDirtyRef.current = true;
+  }, [viewportHeight, viewportWidth]);
+
+  useEffect(() => {
+    if (terrainReady || waterReady) {
+      terrainDirtyRef.current = true;
+    }
+  }, [terrainReady, waterReady]);
+
+  useEffect(() => {
+    structuresDirtyRef.current = true;
+  }, [structures]);
+
   // Keyboard shortcut for command palette (Cmd+K / Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -260,17 +294,6 @@ export const Map = () => {
     localStorage.setItem('dev-fairness-overlay-visible', String(isFairnessOverlayVisible));
   }, [isFairnessOverlayVisible]);
 
-  // Animation loop for structures
-  useEffect(() => {
-    let animationId: number;
-    const animate = (time: number) => {
-      setAnimationTime(time);
-      animationId = requestAnimationFrame(animate);
-    };
-    animationId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationId);
-  }, []);
-
   if (!scenario || !structures.length || !players.length) {
     return (
       <div
@@ -291,33 +314,28 @@ export const Map = () => {
     );
   }
 
-  // Draw the map
-  useEffect(() => {
+  const drawTerrainAndWater = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !terrainReady || !terrainTexture) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    if (!terrainReady || !terrainTexture) return;
-
-    // Set canvas size
+    const { width: viewportWidth, height: viewportHeight } = viewportSizeRef.current;
     if (!viewportWidth || !viewportHeight) return;
 
     canvas.width = viewportWidth;
     canvas.height = viewportHeight;
 
-    // Clear canvas with deep charcoal backdrop
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#080808';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Calculate wrapped offset
-    const wrappedOffsetX = wrap(offset.x, MAP_WIDTH);
-    const wrappedOffsetY = wrap(offset.y, MAP_HEIGHT);
+    const wrappedOffsetX = wrap(offsetRef.current.x, MAP_WIDTH);
+    const wrappedOffsetY = wrap(offsetRef.current.y, MAP_HEIGHT);
     const startX = -wrappedOffsetX;
     const startY = -wrappedOffsetY;
 
-    // Tile pre-rendered water texture
     if (waterReady && waterTexture) {
       const water = waterTexture;
       for (let x = startX; x < canvas.width; x += MAP_WIDTH) {
@@ -327,7 +345,6 @@ export const Map = () => {
       }
     }
 
-    // Tile pre-rendered terrain
     const terrain = terrainTexture;
     if (terrain) {
       for (let x = startX; x < canvas.width; x += MAP_WIDTH) {
@@ -336,25 +353,25 @@ export const Map = () => {
         }
       }
     }
-  }, [offset, terrainReady, terrainTexture, viewportHeight, viewportWidth, waterReady, waterTexture]);
+  }, [terrainReady, terrainTexture, waterReady, waterTexture]);
 
-  // Draw grid overlay on separate transparent canvas
-  useEffect(() => {
+  const drawGrid = useCallback(() => {
     const gridCanvas = gridCanvasRef.current;
     if (!gridCanvas) return;
 
-    const ctx = gridCanvas.getContext('2d');
-    if (!ctx) return;
-
+    const { width: viewportWidth, height: viewportHeight } = viewportSizeRef.current;
     if (!viewportWidth || !viewportHeight) return;
 
     gridCanvas.width = viewportWidth;
     gridCanvas.height = viewportHeight;
 
+    const ctx = gridCanvas.getContext('2d');
+    if (!ctx) return;
+
     ctx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
 
-    const wrappedOffsetX = wrap(offset.x, MAP_WIDTH);
-    const wrappedOffsetY = wrap(offset.y, MAP_HEIGHT);
+    const wrappedOffsetX = wrap(offsetRef.current.x, MAP_WIDTH);
+    const wrappedOffsetY = wrap(offsetRef.current.y, MAP_HEIGHT);
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.lineWidth = 1;
@@ -372,94 +389,130 @@ export const Map = () => {
       ctx.lineTo(gridCanvas.width, y);
       ctx.stroke();
     }
-  }, [offset, viewportHeight, viewportWidth]);
+  }, []);
 
-  // Draw structures layer
-  useEffect(() => {
-    const structuresCanvas = structuresCanvasRef.current;
-    if (!structuresCanvas) return;
+  const drawStructures = useCallback(
+    (time: number) => {
+      const structuresCanvas = structuresCanvasRef.current;
+      if (!structuresCanvas) return;
 
-    const ctx = structuresCanvas.getContext('2d');
-    if (!ctx) return;
+      const { width: viewportWidth, height: viewportHeight } = viewportSizeRef.current;
+      if (!viewportWidth || !viewportHeight) return;
 
-    if (!viewportWidth || !viewportHeight) return;
+      structuresCanvas.width = viewportWidth;
+      structuresCanvas.height = viewportHeight;
 
-    structuresCanvas.width = viewportWidth;
-    structuresCanvas.height = viewportHeight;
+      const ctx = structuresCanvas.getContext('2d');
+      if (!ctx) return;
 
-    ctx.clearRect(0, 0, structuresCanvas.width, structuresCanvas.height);
+      ctx.clearRect(0, 0, structuresCanvas.width, structuresCanvas.height);
 
-    const wrappedOffsetX = wrap(offset.x, MAP_WIDTH);
-    const wrappedOffsetY = wrap(offset.y, MAP_HEIGHT);
+      const wrappedOffsetX = wrap(offsetRef.current.x, MAP_WIDTH);
+      const wrappedOffsetY = wrap(offsetRef.current.y, MAP_HEIGHT);
 
-    // Draw structures with tiling for seamless wrapping
-    for (let tileX = -1; tileX <= 1; tileX++) {
-      for (let tileY = -1; tileY <= 1; tileY++) {
-        const tileOffsetX = tileX * MAP_WIDTH;
-        const tileOffsetY = tileY * MAP_HEIGHT;
+      for (let tileX = -1; tileX <= 1; tileX++) {
+        for (let tileY = -1; tileY <= 1; tileY++) {
+          const tileOffsetX = tileX * MAP_WIDTH;
+          const tileOffsetY = tileY * MAP_HEIGHT;
+          const tileStartX = -wrappedOffsetX + tileOffsetX;
+          const tileStartY = -wrappedOffsetY + tileOffsetY;
 
-        structures.forEach((structure) => {
-          drawStructure(
-            ctx,
-            structure,
-            -wrappedOffsetX + tileOffsetX,
-            -wrappedOffsetY + tileOffsetY,
-            animationTime
-          );
-          // Draw drone count below each structure
-          drawDroneCount(
-            ctx,
-            structure,
-            -wrappedOffsetX + tileOffsetX,
-            -wrappedOffsetY + tileOffsetY,
-            fontSize,
-            isMobile
-          );
-          // Draw outpost label (glyphs) above
-          if (structure.label) {
-            const labelScaleMap: Record<FontSizeOption, number> = {
-              small: 1.35,
-              medium: 1.6,
-              large: 1.85,
-            };
-            const labelSpacingMap: Record<Structure['type'], number> = {
-              hq: 12,
-              foundry: 12,
-              reactor: 14,
-              extractor: 12,
-            };
-            const labelAnchorMultiplierMap: Record<Structure['type'], number> = {
-              hq: 2.6,
-              foundry: 1,
-              reactor: 1,
-              extractor: 1,
-            };
-            const scale = getResponsiveFontValue(fontSize, labelScaleMap, isMobile);
-            const spacing = labelSpacingMap[structure.type] ?? 10;
-            const anchorMultiplier = labelAnchorMultiplierMap[structure.type] ?? 1;
-            const anchorOffset = structure.size * anchorMultiplier;
-            const text = structure.label.toUpperCase();
-            const textWidth = measureGlyphText(text, scale);
-            const textHeight = GLYPH_HEIGHT * scale;
-            const screenX = structure.x - wrappedOffsetX + tileOffsetX;
-            const screenY = structure.y - wrappedOffsetY + tileOffsetY;
-            const textX = screenX - textWidth / 2;
-            const textY = screenY - anchorOffset - textHeight - spacing;
+          if (tileStartX > viewportWidth || tileStartX + MAP_WIDTH < 0) continue;
+          if (tileStartY > viewportHeight || tileStartY + MAP_HEIGHT < 0) continue;
 
-            // Background plate
-            ctx.fillStyle = 'rgba(0,0,0,0.85)';
-            ctx.fillRect(textX - 3, textY - 2, textWidth + 6, textHeight + 4);
+          structures.forEach((structure) => {
+            const structureScreenX = structure.x + tileStartX;
+            const structureScreenY = structure.y + tileStartY;
 
-            // Text in player color (neutrals already have their own color)
-            const r = parseInt(structure.playerColor.slice(1, 3), 16);
-            const g = parseInt(structure.playerColor.slice(3, 5), 16);
-            const b = parseInt(structure.playerColor.slice(5, 7), 16);
-            drawGlyphText(ctx, text, textX, textY, r, g, b, scale);
-          }
-        });
+            const maxSize = structure.size * 2;
+            if (
+              structureScreenX < -maxSize ||
+              structureScreenX > viewportWidth + maxSize ||
+              structureScreenY < -maxSize ||
+              structureScreenY > viewportHeight + maxSize
+            ) {
+              return;
+            }
+
+            drawStructure(ctx, structure, tileStartX, tileStartY, time);
+            drawDroneCount(
+              ctx,
+              structure,
+              tileStartX,
+              tileStartY,
+              fontSizeRef.current,
+              isMobile
+            );
+            if (structure.label) {
+              const labelScaleMap: Record<FontSizeOption, number> = {
+                small: 1.35,
+                medium: 1.6,
+                large: 1.85,
+              };
+              const labelSpacingMap: Record<Structure['type'], number> = {
+                hq: 12,
+                foundry: 12,
+                reactor: 14,
+                extractor: 12,
+              };
+              const labelAnchorMultiplierMap: Record<Structure['type'], number> = {
+                hq: 2.6,
+                foundry: 1,
+                reactor: 1,
+                extractor: 1,
+              };
+              const scale = getResponsiveFontValue(fontSizeRef.current, labelScaleMap, isMobile);
+              const spacing = labelSpacingMap[structure.type] ?? 10;
+              const anchorMultiplier = labelAnchorMultiplierMap[structure.type] ?? 1;
+              const anchorOffset = structure.size * anchorMultiplier;
+              const text = structure.label.toUpperCase();
+              const textWidth = measureGlyphText(text, scale);
+              const textHeight = GLYPH_HEIGHT * scale;
+              const textX = structureScreenX - textWidth / 2;
+              const textY = structureScreenY - anchorOffset - textHeight - spacing;
+
+              ctx.fillStyle = 'rgba(0,0,0,0.85)';
+              ctx.fillRect(textX - 3, textY - 2, textWidth + 6, textHeight + 4);
+
+              const r = parseInt(structure.playerColor.slice(1, 3), 16);
+              const g = parseInt(structure.playerColor.slice(3, 5), 16);
+              const b = parseInt(structure.playerColor.slice(5, 7), 16);
+              drawGlyphText(ctx, text, textX, textY, r, g, b, scale);
+            }
+          });
+        }
       }
-    }
-  }, [animationTime, fontSize, offset, structures, viewportHeight, viewportWidth]);
+    },
+    [structures, isMobile]
+  );
+
+  useEffect(() => {
+    let rafId: number;
+
+    const render = (time: number) => {
+      if (terrainDirtyRef.current) {
+        drawTerrainAndWater();
+        terrainDirtyRef.current = false;
+      }
+
+      if (gridDirtyRef.current) {
+        drawGrid();
+        gridDirtyRef.current = false;
+      }
+
+      const intervalMs = isDragging || isMomentum ? 16 : 33;
+      if (structuresDirtyRef.current || time - lastStructuresDrawRef.current >= intervalMs) {
+        drawStructures(time);
+        structuresDirtyRef.current = false;
+        lastStructuresDrawRef.current = time;
+      }
+
+      rafId = requestAnimationFrame(render);
+    };
+
+    rafId = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(rafId);
+  }, [drawGrid, drawStructures, drawTerrainAndWater, isDragging, isMomentum]);
 
   // Minimap is rendered through dedicated component
 
