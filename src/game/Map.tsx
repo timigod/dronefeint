@@ -585,6 +585,7 @@ export const Map = () => {
         // This was a tap - trigger hover effect
         const coords = toCanvasCoords(touch.clientX, touch.clientY);
         if (coords) {
+          setMousePos(coords);
           updateHover({ clientX: coords.x, clientY: coords.y, offset });
         }
         e.preventDefault();
