@@ -32,6 +32,12 @@ const getViewportSize = () => {
   };
 };
 
+const isMobileDevice = () => {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+         window.innerWidth <= 768;
+};
+
 const getStructureClusterCenter = (structures: Structure[]) => {
   if (structures.length === 0) {
     return { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
@@ -102,6 +108,7 @@ export const Map = () => {
     const cached = localStorage.getItem('dev-fairness-overlay-visible');
     return cached !== null ? cached === 'true' : true;
   });
+  const [isMobile] = useState(() => isMobileDevice());
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -459,6 +466,40 @@ export const Map = () => {
     endDrag();
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (!touch) return;
+    const coords = toCanvasCoords(touch.clientX, touch.clientY);
+    if (!coords) return;
+    beginDrag(coords.x, coords.y);
+    clearHover();
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (!touch) return;
+    const coords = toCanvasCoords(touch.clientX, touch.clientY);
+    if (!coords) return;
+    setMousePos(coords);
+
+    if (isDragging) {
+      clearHover();
+      updateDrag(coords.x, coords.y);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
+    endDrag();
+  };
+
+  const handleTouchCancel = (e: React.TouchEvent) => {
+    e.preventDefault();
+    endDrag();
+  };
+
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     clearHover();
@@ -474,14 +515,41 @@ export const Map = () => {
   return (
     <div
       style={{
-        overflow: 'hidden',
         width: '100vw',
         height: '100vh',
-        cursor: isDragging ? 'grabbing' : hoveredStructure ? 'pointer' : 'grab',
-        position: 'relative',
-        backgroundColor: '#050505',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
+      {/* Mobile Notice Banner - Takes up space at top */}
+      {isMobile && (
+        <div
+          style={{
+            padding: '8px 16px',
+            backgroundColor: 'rgba(8, 8, 12, 0.94)',
+            borderBottom: '1px solid rgba(255,255,255,0.15)',
+            color: '#9ea7c4',
+            fontSize: '12px',
+            fontFamily: 'IBM Plex Mono, Menlo, monospace',
+            textAlign: 'center',
+            pointerEvents: 'none',
+            letterSpacing: '0.03em',
+            flexShrink: 0,
+          }}
+        >
+          Not yet optimized for mobile devices
+        </div>
+      )}
+      <div
+        style={{
+          overflow: 'hidden',
+          width: '100%',
+          flex: 1,
+          cursor: isDragging ? 'grabbing' : hoveredStructure ? 'pointer' : 'grab',
+          position: 'relative',
+          backgroundColor: '#050505',
+        }}
+      >
       {!isReady && (
         <div className="map-loading-overlay">
           <div className="map-loading-panel">
@@ -496,6 +564,10 @@ export const Map = () => {
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
         style={{
           position: 'absolute',
           top: 0,
@@ -503,6 +575,7 @@ export const Map = () => {
           width: '100%',
           height: '100%',
           zIndex: 1,
+          touchAction: 'none',
         }}
       />
       <canvas
@@ -536,16 +609,18 @@ export const Map = () => {
         viewportWidth={viewportWidth}
         viewportHeight={viewportHeight}
       />
-      <Minimap
-        offset={offset}
-        viewportWidth={viewportWidth}
-        viewportHeight={viewportHeight}
-        structures={structures}
-        minimapReady={minimapReady}
-        minimapTexture={minimapTexture}
-        onViewportChange={setOffset}
-      />
-      {import.meta.env.DEV && isFairnessOverlayVisible && <DevFairnessOverlay />}
+      {!isMobile && (
+        <Minimap
+          offset={offset}
+          viewportWidth={viewportWidth}
+          viewportHeight={viewportHeight}
+          structures={structures}
+          minimapReady={minimapReady}
+          minimapTexture={minimapTexture}
+          onViewportChange={setOffset}
+        />
+      )}
+      {import.meta.env.DEV && isFairnessOverlayVisible && !isMobile && <DevFairnessOverlay />}
     
     {/* Command Palette Trigger Button */}
     <button
@@ -612,6 +687,7 @@ export const Map = () => {
         onFontSizeChange={setFontSize}
         triggerRef={commandPaletteButtonRef}
         accentColor={accentColor}
+        isMobile={isMobile}
       />
       {/* Player switcher */}
       <div
@@ -659,6 +735,7 @@ export const Map = () => {
           );
         })}
       </div>
+    </div>
     </div>
   );
 };

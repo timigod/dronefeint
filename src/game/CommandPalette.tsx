@@ -14,6 +14,7 @@ interface CommandPaletteProps {
   onFontSizeChange: (size: FontSizeOption) => void;
   triggerRef?: RefObject<HTMLElement>;
   accentColor?: string;
+  isMobile?: boolean;
 }
 
 type CommandItem = {
@@ -84,6 +85,7 @@ export const CommandPalette = ({
   onFontSizeChange,
   triggerRef,
   accentColor = DEFAULT_ACCENT_COLOR,
+  isMobile = false,
 }: CommandPaletteProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -287,10 +289,12 @@ export const CommandPalette = ({
         ref={paletteRef}
         style={{
           position: 'fixed',
-          top: '80px',
-          right: '20px',
-          width: '500px',
-          maxHeight: '500px',
+          top: isMobile ? '10px' : '80px',
+          right: isMobile ? '10px' : '20px',
+          left: isMobile ? '10px' : 'auto',
+          width: isMobile ? 'auto' : '500px',
+          maxWidth: isMobile ? '100%' : '500px',
+          maxHeight: isMobile ? 'calc(100vh - 80px)' : '500px',
           backgroundColor: 'rgba(20, 10, 15, 0.95)',
           border: `2px solid ${accent}`,
           borderRadius: '8px',
@@ -298,7 +302,7 @@ export const CommandPalette = ({
           overflow: 'hidden',
           zIndex: 1000,
           animation: 'commandPaletteSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          transformOrigin: 'top right',
+          transformOrigin: isMobile ? 'top center' : 'top right',
         }}
       >
         {/* Search Input */}
@@ -334,7 +338,7 @@ export const CommandPalette = ({
         {/* Command List */}
         <div
           style={{
-            maxHeight: '400px',
+            maxHeight: isMobile ? 'calc(100vh - 200px)' : '400px',
             overflowY: 'auto',
             overflowX: 'hidden',
           }}
