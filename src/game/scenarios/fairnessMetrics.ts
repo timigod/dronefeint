@@ -2,6 +2,9 @@ import { distance } from '../utils/math';
 import { MAP_HEIGHT, MAP_WIDTH } from '../mapConstants';
 import type { Structure } from '../structures';
 import type { Player } from './startingScenario';
+import { structuresToOutposts } from '../fogOfWar/adapters';
+import { DEFAULT_FOG_OF_WAR_CONFIG } from '../fogOfWar/config';
+import { getPlayerSonarSources, isOutpostVisibleToPlayer } from '../fogOfWar/visibility';
 
 export type PlayerStructureSummary = {
   playerId: string;
@@ -52,6 +55,13 @@ export type ScenarioFairnessMetrics = {
   totalStructures: number;
   neutralCount: number;
   centerNeutralCount: number;
+  visibleNeutralCounts: number[];
+  visibleEnemyCounts: number[];
+  visibleNeutralMin: number;
+  visibleNeutralMax: number;
+  visibleNeutralRange: number;
+  visibleEnemyMax: number;
+  visibleEnemyRange: number;
   playerSummaries: PlayerStructureSummary[];
   hqDistances: number[];
   hqDistanceRange: number;
@@ -107,6 +117,43 @@ const CENTER_OCCUPANCY_RADIUS = 450;
 export function evaluateScenarioFairness(players: Player[], structures: Structure[]): ScenarioFairnessMetrics {
   const neutrals = structures.filter((structure) => !structure.ownerId);
   const hqs = structures.filter((structure) => structure.type === 'hq');
+  const outposts = structuresToOutposts(structures);
+  const sonarConfig = DEFAULT_FOG_OF_WAR_CONFIG;
+  const perPlayerVisibility = players.map((player) => {
+    const sources = getPlayerSonarSources(outposts, player.id, sonarConfig);
+    const neutralCount = outposts.filter(
+      (outpost) =>
+        !outpost.ownerId &&
+        isOutpostVisibleToPlayer({
+          outpost,
+          playerId: player.id,
+          allOutposts: outposts,
+          sonarSources: sources,
+          config: sonarConfig,
+        })
+    ).length;
+    const enemyCount = outposts.filter(
+      (outpost) =>
+        outpost.ownerId &&
+        outpost.ownerId !== player.id &&
+        isOutpostVisibleToPlayer({
+          outpost,
+          playerId: player.id,
+          allOutposts: outposts,
+          sonarSources: sources,
+          config: sonarConfig,
+        })
+    ).length;
+    return { playerId: player.id, neutralCount, enemyCount };
+  });
+  const visibleNeutralCounts = perPlayerVisibility.map((entry) => entry.neutralCount);
+  const visibleEnemyCounts = perPlayerVisibility.map((entry) => entry.enemyCount);
+  const visibleNeutralMin = visibleNeutralCounts.length ? Math.min(...visibleNeutralCounts) : 0;
+  const visibleNeutralMax = visibleNeutralCounts.length ? Math.max(...visibleNeutralCounts) : 0;
+  const visibleNeutralRange = visibleNeutralMax - visibleNeutralMin;
+  const visibleEnemyMax = visibleEnemyCounts.length ? Math.max(...visibleEnemyCounts) : 0;
+  const visibleEnemyMin = visibleEnemyCounts.length ? Math.min(...visibleEnemyCounts) : 0;
+  const visibleEnemyRange = visibleEnemyMax - visibleEnemyMin;
 
   const center = { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
   const wedgeArc = (Math.PI * 2) / players.length;
@@ -457,6 +504,13 @@ export function evaluateScenarioFairness(players: Player[], structures: Structur
     totalStructures: structures.length,
     neutralCount: neutrals.length,
     centerNeutralCount,
+    visibleNeutralCounts,
+    visibleEnemyCounts,
+    visibleNeutralMin,
+    visibleNeutralMax,
+    visibleNeutralRange,
+    visibleEnemyMax,
+    visibleEnemyRange,
     playerSummaries,
     hqDistances,
     hqDistanceRange,

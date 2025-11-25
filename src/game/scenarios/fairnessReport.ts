@@ -10,6 +10,7 @@ export type ScenarioMetricsReport = {
     players: Player[];
     structures: Structure[];
     activePlayerIndex: number;
+    seedUsed?: number;
   };
   metrics: ScenarioFairnessMetrics;
 };
@@ -44,7 +45,12 @@ export type FairnessStatKey =
   | 'isolationRange'
   | 'clearance'
   | 'maxDistanceToCenter'
-  | 'minStructureDistance';
+  | 'minStructureDistance'
+  | 'visibleNeutralMin'
+  | 'visibleNeutralMax'
+  | 'visibleNeutralRange'
+  | 'visibleEnemyMax'
+  | 'visibleEnemyRange';
 
 export type FairnessStats = Record<FairnessStatKey, FairnessStat>;
 
@@ -72,6 +78,11 @@ export type FairnessThresholds = {
   isolationRange: number;
   clearance: number;
   maxStructureDistanceToCenter: number;
+  minVisibleNeutrals: number;
+  maxVisibleNeutrals: number;
+  visibleNeutralRange: number;
+  maxVisibleEnemies: number;
+  visibleEnemyRange: number;
 };
 
 export const DEFAULT_FAIRNESS_THRESHOLDS: FairnessThresholds = {
@@ -92,6 +103,11 @@ export const DEFAULT_FAIRNESS_THRESHOLDS: FairnessThresholds = {
   isolationRange: 300,
   clearance: 40,
   maxStructureDistanceToCenter: 1600,
+  minVisibleNeutrals: 2,
+  maxVisibleNeutrals: 4,
+  visibleNeutralRange: 1,
+  maxVisibleEnemies: 2,
+  visibleEnemyRange: 1,
 };
 
 export type FairnessCheckResult = {
@@ -135,6 +151,11 @@ const STAT_CONFIG: Record<FairnessStatKey, StatDefinition> = {
   clearance: { reducer: 'min' },
   maxDistanceToCenter: { reducer: 'max' },
   minStructureDistance: { reducer: 'min' },
+  visibleNeutralMin: { reducer: 'min' },
+  visibleNeutralMax: { reducer: 'max' },
+  visibleNeutralRange: { reducer: 'max' },
+  visibleEnemyMax: { reducer: 'max' },
+  visibleEnemyRange: { reducer: 'max' },
 };
 
 const avg = (values: number[]) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0);
@@ -181,6 +202,11 @@ function summarizeReports(reports: ScenarioMetricsReport[]): FairnessSummary {
     updateStat(stats, 'centerNeutralCount', metrics.centerNeutralCount, seed);
     updateStat(stats, 'centerNeutralCountMax', metrics.centerNeutralCount, seed);
     updateStat(stats, 'neutralSpread', metrics.nearestNeutralSpread, seed);
+    updateStat(stats, 'visibleNeutralMin', metrics.visibleNeutralMin, seed);
+    updateStat(stats, 'visibleNeutralMax', metrics.visibleNeutralMax, seed);
+    updateStat(stats, 'visibleNeutralRange', metrics.visibleNeutralRange, seed);
+    updateStat(stats, 'visibleEnemyMax', metrics.visibleEnemyMax, seed);
+    updateStat(stats, 'visibleEnemyRange', metrics.visibleEnemyRange, seed);
     updateStat(stats, 'clusterAverageRange', metrics.clusterAverageRange, seed);
     updateStat(stats, 'clusterMinSpacing', metrics.clusterMinSpacing, seed);
     updateStat(stats, 'clusterMaxSpacing', metrics.clusterMaxSpacing, seed);
@@ -375,6 +401,56 @@ const CHECK_DEFINITIONS: CheckDefinition[] = [
       `Neutral reach skewed (${formatUnits(value)} > ${formatUnits(limit)} on ${seedLabel(seed)}).`,
   },
   {
+    id: 'visibleNeutralFloor',
+    label: 'Spawn vision floor (neutrals)',
+    statKey: 'visibleNeutralMin',
+    thresholdKey: 'minVisibleNeutrals',
+    direction: 'min',
+    passText: (value, limit) => `Lowest neutral visibility at spawn was ${value.toFixed(0)} (needs ≥ ${limit}).`,
+    failText: (value, limit, seed) =>
+      `A player only saw ${value.toFixed(0)} neutral(s) at start on ${seedLabel(seed)} (needs ≥ ${limit}).`,
+  },
+  {
+    id: 'visibleNeutralCeiling',
+    label: 'Spawn vision ceiling (neutrals)',
+    statKey: 'visibleNeutralMax',
+    thresholdKey: 'maxVisibleNeutrals',
+    direction: 'max',
+    passText: (value, limit) => `No one started with more than ${value.toFixed(0)} visible neutrals (cap ${limit}).`,
+    failText: (value, limit, seed) =>
+      `Someone saw ${value.toFixed(0)} neutrals at start on ${seedLabel(seed)} (cap ${limit}).`,
+  },
+  {
+    id: 'visibleNeutralRange',
+    label: 'Neutral vision parity',
+    statKey: 'visibleNeutralRange',
+    thresholdKey: 'visibleNeutralRange',
+    direction: 'max',
+    passText: (value, limit) => `Neutral vision stayed balanced (spread ${value.toFixed(0)} ≤ ${limit}).`,
+    failText: (value, limit, seed) =>
+      `Neutral vision skewed by ${value.toFixed(0)} on ${seedLabel(seed)} (limit ${limit}).`,
+  },
+  {
+    id: 'visibleEnemyCap',
+    label: 'Enemy vision cap',
+    statKey: 'visibleEnemyMax',
+    thresholdKey: 'maxVisibleEnemies',
+    direction: 'max',
+    passText: (value, limit) => `Enemy exposure at spawn stayed low (max ${value.toFixed(0)} ≤ ${limit}).`,
+    failText: (value, limit, seed) =>
+      `Too many enemy outposts were visible (${value.toFixed(0)} > ${limit} on ${seedLabel(seed)}).`,
+  },
+  {
+    id: 'visibleEnemyParity',
+    label: 'Enemy vision parity',
+    statKey: 'visibleEnemyRange',
+    thresholdKey: 'visibleEnemyRange',
+    direction: 'max',
+    passText: (value, limit) => `Enemy vision spread stayed tight (range ${value.toFixed(0)} ≤ ${limit}).`,
+    failText: (value, limit, seed) =>
+      `Enemy vision differed by ${value.toFixed(0)} at start on ${seedLabel(seed)} (limit ${limit}).`,
+  },
+  {
     id: 'isolation',
     label: 'No isolated player',
     statKey: 'isolationRange',
@@ -450,7 +526,7 @@ export function runFairnessSamples(sampleSize: number, startSeed = 1) {
     const seed = startSeed + i;
     const scenario = generateStartingScenario({ seed });
     const metrics = evaluateScenarioFairness(scenario.players, scenario.structures);
-    reports.push({ seed, scenario, metrics });
+    reports.push({ seed: scenario.seedUsed ?? seed, scenario, metrics });
   }
 
   return {

@@ -2,6 +2,9 @@ import outpostNamesRaw from '../../../outpost-names.txt?raw';
 import { MAP_HEIGHT, MAP_WIDTH } from '../mapConstants';
 import { Structure } from '../structures';
 import { rebalanceNeutrals } from './neutralRebalancer';
+import { SONAR_RADIUS } from '../fogOfWar/config';
+import { structuresToOutposts } from '../fogOfWar/adapters';
+import { getPlayerSonarSources, isOutpostVisibleToPlayer } from '../fogOfWar/visibility';
 
 export type Player = {
   id: string;
@@ -47,7 +50,8 @@ const CLUSTER_DISTANCE_MAX = 320;
 const CLUSTER_MIN_SEPARATION = 140;
 const CLUSTER_FOREIGN_MARGIN = 60;
 const CLUSTER_MAX_ATTEMPTS = 500;
-const CROSS_PLAYER_SONAR_BUFFER = 380;
+const CROSS_PLAYER_SONAR_BUFFER = SONAR_RADIUS + 20;
+const FOW_REROLL_LIMIT = 12;
 
 const NEUTRAL_MIN_SEPARATION = 240;
 const NEUTRAL_COUNT = NUM_PLAYERS * 2; // 10 neutrals total in current game setup
@@ -68,6 +72,7 @@ const NEUTRAL_NEAR_RADIUS = 450;
 const CENTER_OCCUPANCY_RADIUS = 450;
 const NEUTRAL_MID_RADIUS = 900;
 const NEUTRAL_FAR_RADIUS = 1400;
+const MAX_STRUCTURE_DISTANCE_TO_CENTER = 1600;
 const NEUTRAL_MID_BAND = { min: NEUTRAL_NEAR_RADIUS, max: NEUTRAL_MID_RADIUS };
 const NEUTRAL_WEDGE_OFFSET_MIN = 0.15;
 const BACKFIELD_PER_PLAYER = 1;
@@ -538,17 +543,20 @@ const balanceNeutralReach = ({
 
 export type StartingScenarioOptions = {
   seed?: number;
+  visionRerollCount?: number;
 };
 
 export function generateStartingScenario(options: StartingScenarioOptions = {}): {
   players: Player[];
   structures: Structure[];
   activePlayerIndex: number;
+  seedUsed: number;
 } {
   const resolvedSeed =
     typeof options.seed === 'number' && Number.isFinite(options.seed)
       ? Math.max(1, Math.floor(Math.abs(options.seed)))
       : Math.floor(Math.random() * 1e9) || 1;
+  const visionRerollCount = options.visionRerollCount ?? 0;
   let s = resolvedSeed;
   const rng = () => {
     s ^= s << 13;
@@ -1188,6 +1196,47 @@ export function generateStartingScenario(options: StartingScenarioOptions = {}):
 }
   }
 
+  const outposts = structuresToOutposts(structures);
+  const spawnVision = players.map((player) => {
+    const sources = getPlayerSonarSources(outposts, player.id);
+    const visibleNeutralCount = outposts.filter(
+      (outpost) =>
+        !outpost.ownerId &&
+        isOutpostVisibleToPlayer({
+          outpost,
+          playerId: player.id,
+          allOutposts: outposts,
+          sonarSources: sources,
+        })
+    ).length;
+    const visibleEnemyCount = outposts.filter(
+      (outpost) =>
+        outpost.ownerId &&
+        outpost.ownerId !== player.id &&
+        isOutpostVisibleToPlayer({
+          outpost,
+          playerId: player.id,
+          allOutposts: outposts,
+          sonarSources: sources,
+        })
+    ).length;
+    return { neutral: visibleNeutralCount, enemy: visibleEnemyCount };
+  });
+  const visibleNeutralCounts = spawnVision.map((entry) => entry.neutral);
+  const visibleEnemyCounts = spawnVision.map((entry) => entry.enemy);
+  const visionConstraintsMet =
+    visibleNeutralCounts.length > 0 &&
+    Math.min(...visibleNeutralCounts) >= 2 &&
+    Math.max(...visibleNeutralCounts) <= 4 &&
+    Math.max(...visibleNeutralCounts) - Math.min(...visibleNeutralCounts) <= 1 &&
+    Math.max(...visibleEnemyCounts) <= 2 &&
+    Math.max(...visibleEnemyCounts) - Math.min(...visibleEnemyCounts) <= 1;
+
+  if (!visionConstraintsMet && visionRerollCount < FOW_REROLL_LIMIT) {
+    const retrySeed = resolvedSeed + 1;
+    return generateStartingScenario({ seed: retrySeed, visionRerollCount: visionRerollCount + 1 });
+  }
+
   // Final sanity: guarantee totals (20 player-owned + 10 neutral = 30). If not, regenerate quickly.
   if (structures.filter((s) => s.ownerId).length !== 20 || structures.filter((s) => !s.ownerId).length !== 10) {
     const retrySeed = resolvedSeed + 1;
@@ -1203,8 +1252,8 @@ export function generateStartingScenario(options: StartingScenarioOptions = {}):
         retrySeed
       );
     }
-    return generateStartingScenario({ seed: retrySeed });
+    return generateStartingScenario({ seed: retrySeed, visionRerollCount });
   }
 
-  return { players, structures, activePlayerIndex };
+  return { players, structures, activePlayerIndex, seedUsed: resolvedSeed };
 }

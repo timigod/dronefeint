@@ -84,6 +84,27 @@ const RAW_METRICS: RawMetricDefinition[] = [
     format: (value: number) => `${value.toFixed(2)}u`,
   },
   {
+    title: 'Min visible neutrals at spawn',
+    description: 'Lowest number of neutral outposts any player sees at t=0.',
+    getValue: (summary: FairnessSummary) => summary.stats.visibleNeutralMin.value,
+    getSeed: (summary: FairnessSummary) => summary.stats.visibleNeutralMin.seed,
+    format: (value: number) => `${value.toFixed(0)} outposts`,
+  },
+  {
+    title: 'Neutral vision spread',
+    description: 'Difference between most and least neutrals visible at spawn.',
+    getValue: (summary: FairnessSummary) => summary.stats.visibleNeutralRange.value,
+    getSeed: (summary: FairnessSummary) => summary.stats.visibleNeutralRange.seed,
+    format: (value: number) => `${value.toFixed(0)} outposts`,
+  },
+  {
+    title: 'Max visible enemy outposts',
+    description: 'Highest number of enemy outposts any player sees at spawn.',
+    getValue: (summary: FairnessSummary) => summary.stats.visibleEnemyMax.value,
+    getSeed: (summary: FairnessSummary) => summary.stats.visibleEnemyMax.seed,
+    format: (value: number) => `${value.toFixed(0)} outposts`,
+  },
+  {
     title: 'Center neutrals',
     description: 'How many neutrals spawned in the central area.',
     getValue: (summary: FairnessSummary) => summary.stats.centerNeutralCount.value,
@@ -384,4 +405,3 @@ export const DevFairnessOverlay = () => {
     </div>
   );
 };
-
