@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { CommandPalette } from './components/CommandPalette';
 import { DevFairnessOverlay } from './components/DevFairnessOverlay';
 import { FogOfWarOverlay } from './components/FogOfWarOverlay';
@@ -20,9 +21,62 @@ import { usePreventContextMenu } from './hooks/usePreventContextMenu';
 import type { Player } from './scenarios/startingScenario';
 import { generateStartingScenario } from './scenarios/startingScenario';
 import type { Structure } from './structures';
+import { COLORS, Z_INDEX } from './styles/constants';
 import { getStructureClusterCenter } from './utils/structures';
 import { getViewportScale, isMobileDevice } from './utils/viewport';
 import { generateLandmasses } from './worldgen/landmasses';
+
+const getLoadingStyle = (viewportWidth?: number, viewportHeight?: number): CSSProperties => ({
+  width: viewportWidth || '100vw',
+  height: viewportHeight || '100vh',
+  backgroundColor: COLORS.background,
+  color: '#ff6b7a',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  letterSpacing: '0.15em',
+  fontSize: '14px',
+});
+
+const getContainerStyle = (isDragging: boolean, hasHover: boolean, isMobile: boolean): CSSProperties => ({
+  width: '100vw',
+  height: '100vh',
+  overflow: 'hidden',
+  cursor: isDragging ? 'grabbing' : hasHover ? 'pointer' : 'grab',
+  position: 'relative',
+  backgroundColor: COLORS.background,
+  paddingBottom: isMobile ? 'env(safe-area-inset-bottom, 0px)' : 0,
+});
+
+const canvasBaseStyle: CSSProperties = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+};
+
+const getMainCanvasStyle = (displayWidth: number, displayHeight: number): CSSProperties => ({
+  ...canvasBaseStyle,
+  width: `${displayWidth}px`,
+  height: `${displayHeight}px`,
+  zIndex: Z_INDEX.terrain,
+  touchAction: 'none',
+});
+
+const getGridCanvasStyle = (displayWidth: number, displayHeight: number): CSSProperties => ({
+  ...canvasBaseStyle,
+  width: `${displayWidth}px`,
+  height: `${displayHeight}px`,
+  pointerEvents: 'none',
+  zIndex: Z_INDEX.grid,
+});
+
+const getStructuresCanvasStyle = (displayWidth: number, displayHeight: number): CSSProperties => ({
+  ...canvasBaseStyle,
+  width: `${displayWidth}px`,
+  height: `${displayHeight}px`,
+  pointerEvents: 'none',
+  zIndex: Z_INDEX.structures,
+});
 
 export const Map = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -35,7 +89,7 @@ export const Map = () => {
   const [players] = useState<Player[]>(scenario.players);
   const [activePlayerIndex, setActivePlayerIndex] = useState<number>(scenario.activePlayerIndex);
   const activePlayer = players[activePlayerIndex] ?? players[0];
-  const accentColor = activePlayer?.color ?? '#dc3545';
+  const accentColor = activePlayer?.color ?? COLORS.defaultAccent;
 
   const [scrollSettings, setScrollSettings] = useState({ invertX: false, invertY: false });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -187,36 +241,14 @@ export const Map = () => {
 
   if (!scenario || !structures.length || !players.length) {
     return (
-      <div
-        style={{
-          width: viewportWidth || '100vw',
-          height: viewportHeight || '100vh',
-          backgroundColor: '#050505',
-          color: '#ff6b7a',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          letterSpacing: '0.15em',
-          fontSize: '14px',
-        }}
-      >
+      <div style={getLoadingStyle(viewportWidth, viewportHeight)}>
         Initializing battlefield...
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        width: '100vw',
-        height: '100vh',
-        overflow: 'hidden',
-        cursor: isDragging ? 'grabbing' : hoveredStructure ? 'pointer' : 'grab',
-        position: 'relative',
-        backgroundColor: '#050505',
-        paddingBottom: isMobile ? 'env(safe-area-inset-bottom, 0px)' : 0,
-      }}
-    >
+    <div style={getContainerStyle(isDragging, !!hoveredStructure, isMobile)}>
       {!isReady && (
         <div className="map-loading-overlay">
           <div className="map-loading-panel">
@@ -235,27 +267,11 @@ export const Map = () => {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchCancel}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: `${displayWidth}px`,
-          height: `${displayHeight}px`,
-          zIndex: 1,
-          touchAction: 'none',
-        }}
+        style={getMainCanvasStyle(displayWidth, displayHeight)}
       />
       <canvas
         ref={gridCanvasRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: `${displayWidth}px`,
-          height: `${displayHeight}px`,
-          pointerEvents: 'none',
-          zIndex: 2,
-        }}
+        style={getGridCanvasStyle(displayWidth, displayHeight)}
       />
       <FogOfWarOverlay
         offset={offset}
@@ -267,15 +283,7 @@ export const Map = () => {
       />
       <canvas
         ref={structuresCanvasRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: `${displayWidth}px`,
-          height: `${displayHeight}px`,
-          pointerEvents: 'none',
-          zIndex: 4,
-        }}
+        style={getStructuresCanvasStyle(displayWidth, displayHeight)}
       />
       <TooltipOverlay
         hoveredStructure={hoveredStructure}

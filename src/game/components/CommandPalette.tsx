@@ -1,6 +1,10 @@
 import { useEffect, useState, useRef, RefObject } from 'react';
-
-type FontSizeOption = 'small' | 'medium' | 'large';
+import type { CSSProperties } from 'react';
+import type { FontSizeOption } from '../utils/fontSize';
+import { COLORS, Z_INDEX } from '../styles/constants';
+import { hexToRgba } from '../utils/color';
+import { fuzzyMatchScore } from '../utils/fuzzyMatch';
+import { FONT_PREVIEW_SIZES, FONT_SIZE_OPTIONS } from './commandPaletteConfig';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -27,56 +31,75 @@ type CommandItem = {
   children?: CommandItem[];
 };
 
-const FONT_SIZE_OPTIONS: FontSizeOption[] = ['small', 'medium', 'large'];
-const FONT_PREVIEW_SIZES: Record<FontSizeOption, string> = {
-  small: '11px',
-  medium: '14px',
-  large: '17px',
-};
+const DEFAULT_ACCENT_COLOR = COLORS.defaultAccent;
 
-const DEFAULT_ACCENT_COLOR = '#dc3545';
+const getPaletteContainerStyle = (
+  isMobile: boolean,
+  mobileAnchor: { bottom: number; right: number },
+  accent: string,
+  accentRgba: (alpha: number) => string
+): CSSProperties => ({
+  position: 'fixed',
+  top: isMobile ? 'auto' : '80px',
+  bottom: isMobile ? `${mobileAnchor.bottom}px` : 'auto',
+  right: isMobile ? `${mobileAnchor.right}px` : '20px',
+  left: 'auto',
+  width: isMobile ? 'min(520px, calc(100% - 32px))' : '500px',
+  maxWidth: isMobile ? 'min(520px, calc(100% - 32px))' : '500px',
+  maxHeight: isMobile ? '70vh' : '500px',
+  backgroundColor: COLORS.panelBackgroundSolid,
+  border: `2px solid ${accent}`,
+  borderRadius: isMobile ? '12px' : '8px',
+  boxShadow: isMobile
+    ? `0 -8px 32px ${accentRgba(0.25)}, 0 -2px 20px ${accentRgba(0.2)}`
+    : `0 8px 32px ${accentRgba(0.3)}, 0 0 60px ${accentRgba(0.15)}`,
+  overflow: 'hidden',
+  zIndex: Z_INDEX.commandPalette,
+  animation: 'commandPaletteSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  transformOrigin: isMobile ? 'bottom right' : 'top right',
+  display: 'flex',
+  flexDirection: 'column',
+});
 
-const hexToRgba = (hex: string, alpha = 1) => {
-  const sanitized = hex.replace('#', '');
-  if (sanitized.length !== 6) {
-    return `rgba(220, 53, 69, ${alpha})`;
-  }
+const getCommandListContainerStyle = (isMobile: boolean): CSSProperties => ({
+  flex: isMobile ? 1 : undefined,
+  maxHeight: isMobile ? '50vh' : '400px',
+  overflowY: 'auto',
+  overflowX: 'hidden',
+});
 
-  const r = parseInt(sanitized.slice(0, 2), 16);
-  const g = parseInt(sanitized.slice(2, 4), 16);
-  const b = parseInt(sanitized.slice(4, 6), 16);
+const getSearchSectionStyle = (
+  placement: 'top' | 'bottom',
+  isMobile: boolean,
+  accentRgba: (alpha: number) => string
+): CSSProperties => ({
+  padding: '16px',
+  paddingTop: placement === 'bottom' && isMobile ? '12px' : '16px',
+  paddingBottom:
+    placement === 'bottom' && isMobile
+      ? 'calc(12px + env(safe-area-inset-bottom, 0px))'
+      : '16px',
+  borderBottom: !isMobile && placement === 'top' ? `1px solid ${accentRgba(0.3)}` : 'none',
+  borderTop: isMobile && placement === 'bottom' ? `1px solid ${accentRgba(0.3)}` : 'none',
+  backgroundColor: 'transparent',
+});
 
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
-
-const fuzzyMatchScore = (text: string, query: string): number => {
-  if (!query) return 0;
-  const haystack = text.toLowerCase();
-  const needle = query.toLowerCase();
-
-  let score = 0;
-  let haystackIndex = 0;
-
-  for (let i = 0; i < needle.length; i++) {
-    const char = needle[i];
-    const foundIndex = haystack.indexOf(char, haystackIndex);
-    if (foundIndex === -1) {
-      return -1;
-    }
-
-    const distance = foundIndex - haystackIndex;
-    score += distance === 0 ? 3 : Math.max(1.5 - distance * 0.1, 0.1);
-
-    if (foundIndex === 0 || haystack[foundIndex - 1] === ' ') {
-      score += 1;
-    }
-
-    haystackIndex = foundIndex + 1;
-  }
-
-  score += Math.min(2, needle.length / haystack.length);
-  return score;
-};
+const getSearchInputStyle = (
+  accent: string,
+  accentRgba: (alpha: number) => string,
+  isFocused: boolean
+): CSSProperties => ({
+  width: '100%',
+  padding: '12px 16px',
+  backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  border: `1px solid ${isFocused ? accent : accentRgba(0.4)}`,
+  boxShadow: isFocused ? `0 0 0 2px ${accentRgba(0.2)}` : 'none',
+  borderRadius: '6px',
+  color: accent,
+  fontSize: '16px',
+  outline: 'none',
+  fontFamily: 'inherit',
+});
 
 export const CommandPalette = ({
   isOpen,
@@ -97,6 +120,7 @@ export const CommandPalette = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const paletteRef = useRef<HTMLDivElement>(null);
   const [mobileAnchor, setMobileAnchor] = useState({ bottom: 24, right: 16 });
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const accent = accentColor ?? DEFAULT_ACCENT_COLOR;
   const accentRgba = (alpha: number) => hexToRgba(accent, alpha);
 
@@ -319,44 +343,16 @@ export const CommandPalette = ({
   };
 
   const renderSearchSection = (placement: 'top' | 'bottom') => (
-    <div
-      style={{
-        padding: '16px',
-        paddingTop: placement === 'bottom' && isMobile ? '12px' : '16px',
-        paddingBottom:
-          placement === 'bottom' && isMobile
-            ? 'calc(12px + env(safe-area-inset-bottom, 0px))'
-            : '16px',
-        borderBottom: !isMobile && placement === 'top' ? `1px solid ${accentRgba(0.3)}` : 'none',
-        borderTop: isMobile && placement === 'bottom' ? `1px solid ${accentRgba(0.3)}` : 'none',
-        backgroundColor: 'transparent',
-      }}
-    >
+    <div style={getSearchSectionStyle(placement, isMobile, accentRgba)}>
       <input
         ref={inputRef}
         type="text"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         placeholder="Search commands..."
-        style={{
-          width: '100%',
-          padding: '12px 16px',
-          backgroundColor: 'rgba(0, 0, 0, 0.3)',
-          border: `1px solid ${accentRgba(0.4)}`,
-          borderRadius: '6px',
-          color: accent,
-          fontSize: '16px',
-          outline: 'none',
-          fontFamily: 'inherit',
-        }}
-        onFocus={(e) => {
-          e.target.style.border = `1px solid ${accent}`;
-          e.target.style.boxShadow = `0 0 0 2px ${accentRgba(0.2)}`;
-        }}
-        onBlur={(e) => {
-          e.target.style.border = `1px solid ${accentRgba(0.4)}`;
-          e.target.style.boxShadow = 'none';
-        }}
+        style={getSearchInputStyle(accent, accentRgba, isSearchFocused)}
+        onFocus={() => setIsSearchFocused(true)}
+        onBlur={() => setIsSearchFocused(false)}
       />
     </div>
   );
@@ -402,40 +398,12 @@ export const CommandPalette = ({
       {/* Command Palette */}
       <div
         ref={paletteRef}
-        style={{
-          position: 'fixed',
-          top: isMobile ? 'auto' : '80px',
-          bottom: isMobile ? `${mobileAnchor.bottom}px` : 'auto',
-          right: isMobile ? `${mobileAnchor.right}px` : '20px',
-          left: 'auto',
-          width: isMobile ? 'min(520px, calc(100% - 32px))' : '500px',
-          maxWidth: isMobile ? 'min(520px, calc(100% - 32px))' : '500px',
-          maxHeight: isMobile ? '70vh' : '500px',
-          backgroundColor: 'rgba(20, 10, 15, 0.95)',
-          border: `2px solid ${accent}`,
-          borderRadius: isMobile ? '12px' : '8px',
-          boxShadow: isMobile
-            ? `0 -8px 32px ${accentRgba(0.25)}, 0 -2px 20px ${accentRgba(0.2)}`
-            : `0 8px 32px ${accentRgba(0.3)}, 0 0 60px ${accentRgba(0.15)}`,
-          overflow: 'hidden',
-          zIndex: 1000,
-          animation: 'commandPaletteSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          transformOrigin: isMobile ? 'bottom right' : 'top right',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
+        style={getPaletteContainerStyle(isMobile, mobileAnchor, accent, accentRgba)}
       >
         {!isMobile && renderSearchSection('top')}
 
         {/* Command List */}
-        <div
-          style={{
-            flex: isMobile ? 1 : undefined,
-            maxHeight: isMobile ? '50vh' : '400px',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-          }}
-        >
+        <div style={getCommandListContainerStyle(isMobile)}>
           {visibleCommands.length === 0 ? (
             <div
               style={{
@@ -548,4 +516,3 @@ export const CommandPalette = ({
     </>
   );
 };
-

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, MouseEventHandler, TouchEventHandler } from 'react';
+import type { SonarCircle } from '../hooks/useFogOfWar';
 import type { Structure } from '../structures';
 import {
   MAP_HEIGHT,
@@ -9,8 +10,9 @@ import {
   MINIMAP_TEXTURE_WIDTH,
   MINIMAP_WIDTH,
 } from '../mapConstants';
+import { COLORS, Z_INDEX } from '../styles/constants';
+import { parseHexColor } from '../utils/color';
 import { wrap } from '../utils/math';
-import type { SonarCircle } from '../hooks/useFogOfWar';
 
 export interface MinimapProps {
   structures: Structure[];
@@ -48,6 +50,18 @@ const getViewportSegments = (start: number, length: number, limit: number) => {
   return segments;
 };
 
+const minimapCanvasBaseStyle: CSSProperties = {
+  position: 'absolute',
+  bottom: '20px',
+  right: '20px',
+  border: '1px solid rgba(255, 255, 255, 0.35)',
+  borderRadius: '4px',
+  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+  cursor: 'pointer',
+  zIndex: Z_INDEX.tooltip,
+  touchAction: 'none',
+};
+
 export const Minimap = ({
   structures,
   offset,
@@ -58,7 +72,7 @@ export const Minimap = ({
   onViewportChange,
   style,
   sonarCircles = [],
-  playerColor = '#dc3545',
+  playerColor = COLORS.defaultAccent,
   fogOfWarEnabled = false,
 }: MinimapProps) => {
   const minimapRef = useRef<HTMLCanvasElement | null>(null);
@@ -171,9 +185,7 @@ export const Minimap = ({
 
     // Draw sonar circles if fog of war is enabled
     if (fogOfWarEnabled && sonarCircles.length > 0) {
-      const r = parseInt(playerColor.slice(1, 3), 16);
-      const g = parseInt(playerColor.slice(3, 5), 16);
-      const b = parseInt(playerColor.slice(5, 7), 16);
+      const [r, g, b] = parseHexColor(playerColor);
 
       sonarCircles.forEach((circle) => {
         const miniX = circle.x * baseScaleX;
@@ -207,9 +219,7 @@ export const Minimap = ({
       const miniX = structX * baseScaleX;
       const miniY = structY * baseScaleY;
 
-      const r = parseInt(structColor.slice(1, 3), 16);
-      const g = parseInt(structColor.slice(3, 5), 16);
-      const b = parseInt(structColor.slice(5, 7), 16);
+      const [r, g, b] = parseHexColor(structColor);
 
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.8)`;
 
@@ -276,17 +286,9 @@ export const Minimap = ({
       onTouchEnd={handleMouseUp}
       onTouchCancel={handleMouseUp}
       style={{
-        position: 'absolute',
-        bottom: '20px',
-        right: '20px',
-        border: '1px solid rgba(255, 255, 255, 0.35)',
-        borderRadius: '4px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+        ...minimapCanvasBaseStyle,
         width: `${MINIMAP_WIDTH}px`,
         height: `${MINIMAP_HEIGHT}px`,
-        cursor: 'pointer',
-        zIndex: 5,
-        touchAction: 'none',
         ...style,
       }}
     />

@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
-import { drawGlyphText, measureGlyphText, GLYPH_HEIGHT } from '../glyphs';
-import { GRID_SIZE, MAP_HEIGHT, MAP_WIDTH } from '../mapConstants';
-import { drawStructure, drawDroneCount, type Structure } from '../structures';
-import type { FontSizeOption } from '../utils/fontSize';
-import { getResponsiveFontValue } from '../utils/fontSize';
-import { wrap } from '../utils/math';
 import type { PlayerOutpostView } from '../fogOfWar/types';
+import type { Structure } from '../structures';
+import type { FontSizeOption } from '../utils/fontSize';
 import {
-  VISIBILITY_CONFIG,
+  buildVisibilityLookup,
   desaturateColor,
   drawLastSeenIndicator,
   drawUnknownIndicator,
-  buildVisibilityLookup,
+  VISIBILITY_CONFIG,
 } from '../fogOfWar/rendering';
+import { GLYPH_HEIGHT, drawGlyphText, measureGlyphText } from '../glyphs';
+import { GRID_SIZE, MAP_HEIGHT, MAP_WIDTH } from '../mapConstants';
+import { drawDroneCount, drawStructure } from '../structures';
+import { parseHexColor } from '../utils/color';
+import { getResponsiveFontValue } from '../utils/fontSize';
+import { wrap } from '../utils/math';
 
 interface UseMapRenderingProps {
   canvasRef: RefObject<HTMLCanvasElement>;
@@ -250,9 +252,7 @@ export const useMapRendering = ({
             // For non-live visibility, we need to modify the structure's color
             let modifiedStructure = structure;
             if (visibility !== 'live' && visConfig.colorDesaturation > 0) {
-              const r = parseInt(structure.playerColor.slice(1, 3), 16);
-              const g = parseInt(structure.playerColor.slice(3, 5), 16);
-              const b = parseInt(structure.playerColor.slice(5, 7), 16);
+              const [r, g, b] = parseHexColor(structure.playerColor);
               const [dr, dg, db] = desaturateColor(r, g, b, visConfig.colorDesaturation);
               const desatColor = `#${dr.toString(16).padStart(2, '0')}${dg.toString(16).padStart(2, '0')}${db.toString(16).padStart(2, '0')}`;
               modifiedStructure = { ...structure, playerColor: desatColor };
@@ -319,9 +319,7 @@ export const useMapRendering = ({
               ctx.fillStyle = 'rgba(0,0,0,0.85)';
               ctx.fillRect(textX - 3, textY - 2, textWidth + 6, textHeight + 4);
 
-              let r = parseInt(structure.playerColor.slice(1, 3), 16);
-              let g = parseInt(structure.playerColor.slice(3, 5), 16);
-              let b = parseInt(structure.playerColor.slice(5, 7), 16);
+              let [r, g, b] = parseHexColor(structure.playerColor);
               if (visibility !== 'live' && visConfig.colorDesaturation > 0) {
                 [r, g, b] = desaturateColor(r, g, b, visConfig.colorDesaturation);
               }

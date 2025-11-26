@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
-import type { Structure } from '../structures';
-import { GLYPH_HEIGHT, drawGlyphText, measureGlyphText } from '../glyphs';
-import type { FontSizeOption } from '../utils/fontSize';
-import { getResponsiveFontValue } from '../utils/fontSize';
 import type { PlayerOutpostView } from '../fogOfWar/types';
+import type { Structure } from '../structures';
+import type { FontSizeOption } from '../utils/fontSize';
+import { Z_INDEX } from '../styles/constants';
+import { GLYPH_HEIGHT, drawGlyphText, measureGlyphText } from '../glyphs';
 import { formatTimeAgo, desaturateColor, VISIBILITY_CONFIG } from '../fogOfWar/rendering';
+import { parseHexColor } from '../utils/color';
+import { getResponsiveFontValue } from '../utils/fontSize';
 
 interface TooltipOverlayProps {
   hoveredStructure: Structure | null;
@@ -60,9 +62,7 @@ export const TooltipOverlay = ({
     const visConfig = VISIBILITY_CONFIG[visibility];
 
     // Adjust colors based on visibility
-    let r = parseInt(playerColor.slice(1, 3), 16);
-    let g = parseInt(playerColor.slice(3, 5), 16);
-    let b = parseInt(playerColor.slice(5, 7), 16);
+    let [r, g, b] = parseHexColor(playerColor);
     
     if (visibility !== 'live' && visConfig.colorDesaturation > 0) {
       [r, g, b] = desaturateColor(r, g, b, visConfig.colorDesaturation);
@@ -182,7 +182,7 @@ export const TooltipOverlay = ({
         width: displayWidth ? `${displayWidth}px` : '100%',
         height: displayHeight ? `${displayHeight}px` : '100%',
         pointerEvents: 'none',
-        zIndex: 5,
+        zIndex: Z_INDEX.tooltip,
       }}
     />
   );

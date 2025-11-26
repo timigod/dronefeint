@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { MAP_HEIGHT, MAP_WIDTH } from '../mapConstants';
-import { wrap } from '../utils/math';
 import type { SonarCircle } from '../hooks/useFogOfWar';
+import { MAP_HEIGHT, MAP_WIDTH } from '../mapConstants';
+import { Z_INDEX } from '../styles/constants';
+import { parseHexColor } from '../utils/color';
+import { BAYER_4x4 } from '../utils/dithering';
+import { wrap } from '../utils/math';
 
 interface FogOfWarOverlayProps {
   offset: { x: number; y: number };
@@ -11,14 +14,6 @@ interface FogOfWarOverlayProps {
   playerColor: string;
   enabled: boolean;
 }
-
-// 4x4 Bayer dithering matrix for smooth edge transitions
-const BAYER_4x4 = [
-  [0 / 16, 8 / 16, 2 / 16, 10 / 16],
-  [12 / 16, 4 / 16, 14 / 16, 6 / 16],
-  [3 / 16, 11 / 16, 1 / 16, 9 / 16],
-  [15 / 16, 7 / 16, 13 / 16, 5 / 16],
-];
 
 // Edge fade distance in pixels
 const EDGE_FADE_DISTANCE = 60;
@@ -50,9 +45,7 @@ export const FogOfWarOverlay = ({
     ctx.clearRect(0, 0, viewportWidth, viewportHeight);
 
     // Parse player color for sonar ring effects
-    const r = parseInt(playerColor.slice(1, 3), 16);
-    const g = parseInt(playerColor.slice(3, 5), 16);
-    const b = parseInt(playerColor.slice(5, 7), 16);
+    const [r, g, b] = parseHexColor(playerColor);
 
     const wrappedOffsetX = wrap(offset.x, MAP_WIDTH);
     const wrappedOffsetY = wrap(offset.y, MAP_HEIGHT);
@@ -224,9 +217,8 @@ export const FogOfWarOverlay = ({
         width: viewportWidth,
         height: viewportHeight,
         pointerEvents: 'none',
-        zIndex: 3, // Above terrain and grid, below structures
+        zIndex: Z_INDEX.fogOfWar, // Above terrain and grid, below structures
       }}
     />
   );
 };
-

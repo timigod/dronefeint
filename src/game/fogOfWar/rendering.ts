@@ -9,6 +9,7 @@ import {
 import { GLYPH_HEIGHT, drawGlyphText, measureGlyphText } from '../glyphs';
 import type { FontSizeOption } from '../utils/fontSize';
 import { getResponsiveFontValue } from '../utils/fontSize';
+import { parseHexColor } from '../utils/color';
 
 // Visual configuration for different visibility states
 export const VISIBILITY_CONFIG = {
@@ -47,9 +48,7 @@ export const getVisibilityAdjustedColor = (
   playerColor: string,
   visibility: 'live' | 'lastSeen' | 'unknown'
 ): { r: number; g: number; b: number; opacity: number } => {
-  const r = parseInt(playerColor.slice(1, 3), 16);
-  const g = parseInt(playerColor.slice(3, 5), 16);
-  const b = parseInt(playerColor.slice(5, 7), 16);
+  const [r, g, b] = parseHexColor(playerColor);
 
   const config = VISIBILITY_CONFIG[visibility];
   const [dr, dg, db] = desaturateColor(r, g, b, config.colorDesaturation);
@@ -194,4 +193,3 @@ export const buildVisibilityLookup = (
   });
   return map;
 };
-

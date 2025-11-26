@@ -1,4 +1,6 @@
 import type { FontSizeOption } from './utils/fontSize';
+import { BAYER_4x4 } from './utils/dithering';
+import { parseHexColor } from './utils/color';
 import { getResponsiveFontValue } from './utils/fontSize';
 
 // Structure types for the game
@@ -19,14 +21,6 @@ export interface Structure {
   useGoogleFont?: boolean; // Use Google Font instead of geometric rendering
   cacheVersion?: number; // bump to force sprite cache refresh when data changes
 }
-
-// Bayer matrix for dithering
-const BAYER_4x4 = [
-  [0/16, 8/16, 2/16, 10/16],
-  [12/16, 4/16, 14/16, 6/16],
-  [3/16, 11/16, 1/16, 9/16],
-  [15/16, 7/16, 13/16, 5/16]
-];
 
 // Simple hash to get per-structure phase offsets
 function hashId(id: string): number {
@@ -51,9 +45,7 @@ export function drawStructure(
   const screenY = y + offsetY;
 
   // Parse player color
-  const r = parseInt(playerColor.slice(1, 3), 16);
-  const g = parseInt(playerColor.slice(3, 5), 16);
-  const b = parseInt(playerColor.slice(5, 7), 16);
+  const [r, g, b] = parseHexColor(playerColor);
 
   // Draw subtle shadow/background circle to distinguish from terrain
   const bgRadius = size * 1.3;
@@ -739,9 +731,7 @@ export function drawDroneCount(
   const screenY = y + offsetY;
 
   // Parse player color
-  const r = parseInt(playerColor.slice(1, 3), 16);
-  const g = parseInt(playerColor.slice(3, 5), 16);
-  const b = parseInt(playerColor.slice(5, 7), 16);
+  const [r, g, b] = parseHexColor(playerColor);
 
   const spacing = DRONE_COUNT_SPACING[type] ?? 3;
 
