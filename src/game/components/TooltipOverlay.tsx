@@ -3,6 +3,8 @@ import type { Structure } from '../structures';
 import { GLYPH_HEIGHT, drawGlyphText, measureGlyphText } from '../glyphs';
 import type { FontSizeOption } from '../utils/fontSize';
 import { getResponsiveFontValue } from '../utils/fontSize';
+import type { PlayerOutpostView } from '../fogOfWar/types';
+import { formatTimeAgo, desaturateColor, VISIBILITY_CONFIG } from '../fogOfWar/rendering';
 
 interface TooltipOverlayProps {
   hoveredStructure: Structure | null;
@@ -13,6 +15,10 @@ interface TooltipOverlayProps {
   displayWidth?: number;
   displayHeight?: number;
   isMobile: boolean;
+  // Fog of war props
+  outpostViews?: PlayerOutpostView[];
+  gameTime?: number;
+  fogOfWarEnabled?: boolean;
 }
 
 export const TooltipOverlay = ({
@@ -24,6 +30,9 @@ export const TooltipOverlay = ({
   displayWidth,
   displayHeight,
   isMobile,
+  outpostViews = [],
+  gameTime = Date.now(),
+  fogOfWarEnabled = false,
 }: TooltipOverlayProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -42,9 +51,22 @@ export const TooltipOverlay = ({
     if (!hoveredStructure) return;
 
     const { playerColor, type, droneGenerationRate } = hoveredStructure;
-    const r = parseInt(playerColor.slice(1, 3), 16);
-    const g = parseInt(playerColor.slice(3, 5), 16);
-    const b = parseInt(playerColor.slice(5, 7), 16);
+    
+    // Get visibility state if fog of war is enabled
+    const outpostView = fogOfWarEnabled
+      ? outpostViews.find((v) => v.id === hoveredStructure.id)
+      : undefined;
+    const visibility = outpostView?.visibility ?? 'live';
+    const visConfig = VISIBILITY_CONFIG[visibility];
+
+    // Adjust colors based on visibility
+    let r = parseInt(playerColor.slice(1, 3), 16);
+    let g = parseInt(playerColor.slice(3, 5), 16);
+    let b = parseInt(playerColor.slice(5, 7), 16);
+    
+    if (visibility !== 'live' && visConfig.colorDesaturation > 0) {
+      [r, g, b] = desaturateColor(r, g, b, visConfig.colorDesaturation);
+    }
 
     const typeName =
       type === 'hq'
@@ -55,16 +77,28 @@ export const TooltipOverlay = ({
         ? 'REACTOR'
         : 'EXTRACTOR';
 
-    const lines = [typeName];
+    const lines: string[] = [typeName];
 
-    if (type === 'foundry') {
-      lines.push('+3 DRONES/MIN');
-    } else if (type === 'reactor') {
-      lines.push('+50 ENERGY');
-    } else if (type === 'hq') {
-      lines.push('+150 ENERGY');
-    } else if (droneGenerationRate !== undefined) {
-      lines.push(`+${droneGenerationRate}/MIN`);
+    // Add visibility status line for fog of war
+    if (fogOfWarEnabled && visibility !== 'live') {
+      if (visibility === 'lastSeen' && outpostView?.visibility === 'lastSeen') {
+        lines.push(`~${formatTimeAgo(outpostView.lastSeenAt, gameTime)}`);
+      } else if (visibility === 'unknown') {
+        lines.push('UNKNOWN');
+      }
+    }
+
+    // Add structure-specific info (only for live visibility)
+    if (visibility === 'live') {
+      if (type === 'foundry') {
+        lines.push('+3 DRONES/MIN');
+      } else if (type === 'reactor') {
+        lines.push('+50 ENERGY');
+      } else if (type === 'hq') {
+        lines.push('+150 ENERGY');
+      } else if (droneGenerationRate !== undefined) {
+        lines.push(`+${droneGenerationRate}/MIN`);
+      }
     }
 
     const tooltipScaleMap: Record<FontSizeOption, number> = {
@@ -88,10 +122,13 @@ export const TooltipOverlay = ({
     const tooltipX = mousePos.x + 15;
     const tooltipY = mousePos.y + 15;
 
+    ctx.globalAlpha = visibility === 'live' ? 1 : 0.85;
+
     ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
     ctx.fillRect(tooltipX - padding, tooltipY - padding, textWidth + padding * 2, tooltipHeight);
 
-    ctx.strokeStyle = playerColor;
+    const borderColor = `rgb(${r}, ${g}, ${b})`;
+    ctx.strokeStyle = borderColor;
     ctx.lineWidth = 2;
     ctx.strokeRect(tooltipX - padding, tooltipY - padding, textWidth + padding * 2, tooltipHeight);
 
@@ -104,7 +141,18 @@ export const TooltipOverlay = ({
         drawGlyphText(ctx, line, startX, currentY, r, g, b, scale);
         drawGlyphText(ctx, line, startX + scale * 0.4, currentY, r, g, b, scale);
       } else {
-        drawGlyphText(ctx, line, startX, currentY, r, g, b, scale);
+        // For visibility status lines, use slightly dimmer color
+        const dimFactor = line.startsWith('~') || line === 'UNKNOWN' ? 0.7 : 1;
+        drawGlyphText(
+          ctx,
+          line,
+          startX,
+          currentY,
+          Math.floor(r * dimFactor),
+          Math.floor(g * dimFactor),
+          Math.floor(b * dimFactor),
+          scale
+        );
       }
 
       if (index === 0 && lines.length > 1) {
@@ -120,7 +168,9 @@ export const TooltipOverlay = ({
         currentY += lineHeight;
       }
     });
-  }, [fontSize, hoveredStructure, isMobile, mousePos, viewportHeight, viewportWidth]);
+    
+    ctx.globalAlpha = 1;
+  }, [fontSize, hoveredStructure, isMobile, mousePos, viewportHeight, viewportWidth, outpostViews, gameTime, fogOfWarEnabled]);
 
   return (
     <canvas
@@ -132,7 +182,7 @@ export const TooltipOverlay = ({
         width: displayWidth ? `${displayWidth}px` : '100%',
         height: displayHeight ? `${displayHeight}px` : '100%',
         pointerEvents: 'none',
-        zIndex: 4,
+        zIndex: 5,
       }}
     />
   );

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommandPalette } from './components/CommandPalette';
 import { DevFairnessOverlay } from './components/DevFairnessOverlay';
+import { FogOfWarOverlay } from './components/FogOfWarOverlay';
 import { Minimap } from './components/Minimap';
 import { TooltipOverlay } from './components/TooltipOverlay';
 import { CommandPaletteButton } from './components/CommandPaletteButton';
 import { PlayerSwitcher } from './components/PlayerSwitcher';
 import { useDragPan } from './hooks/useDragPan';
+import { useFogOfWar } from './hooks/useFogOfWar';
 import { useFontSizeSetting } from './hooks/useFontSizeSetting';
 import { useMapInteractions } from './hooks/useMapInteractions';
 import { useMapRendering } from './hooks/useMapRendering';
@@ -39,8 +41,27 @@ export const Map = () => {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [isMobile] = useState(() => isMobileDevice());
+  const [fogOfWarEnabled, setFogOfWarEnabled] = useState(true);
+  const [gameTime, setGameTime] = useState(() => Date.now());
   const { fontSize, setFontSize } = useFontSizeSetting();
   const { isVisible: isFairnessOverlayVisible } = useDevFairnessOverlay();
+
+  // Update game time periodically for fog of war "last seen" display
+  useEffect(() => {
+    if (!fogOfWarEnabled) return;
+    const interval = setInterval(() => {
+      setGameTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [fogOfWarEnabled]);
+
+  // Fog of war state
+  const { worldView, sonarCircles } = useFogOfWar({
+    structures,
+    playerId: activePlayer?.id,
+    gameTime,
+    enabled: fogOfWarEnabled,
+  });
 
   const {
     offset,
@@ -103,6 +124,9 @@ export const Map = () => {
     waterReady,
     isDragging,
     isMomentum,
+    fogOfWarEnabled,
+    outpostViews: worldView.outposts,
+    gameTime,
   });
 
   const {
@@ -233,6 +257,14 @@ export const Map = () => {
           zIndex: 2,
         }}
       />
+      <FogOfWarOverlay
+        offset={offset}
+        viewportWidth={viewportWidth}
+        viewportHeight={viewportHeight}
+        sonarCircles={sonarCircles}
+        playerColor={accentColor}
+        enabled={fogOfWarEnabled}
+      />
       <canvas
         ref={structuresCanvasRef}
         style={{
@@ -242,7 +274,7 @@ export const Map = () => {
           width: `${displayWidth}px`,
           height: `${displayHeight}px`,
           pointerEvents: 'none',
-          zIndex: 3,
+          zIndex: 4,
         }}
       />
       <TooltipOverlay
@@ -254,6 +286,9 @@ export const Map = () => {
         displayWidth={displayWidth}
         displayHeight={displayHeight}
         isMobile={isMobile}
+        outpostViews={worldView.outposts}
+        gameTime={gameTime}
+        fogOfWarEnabled={fogOfWarEnabled}
       />
       {!isMobile && (
         <Minimap
@@ -264,6 +299,9 @@ export const Map = () => {
           minimapReady={minimapReady}
           minimapTexture={minimapTexture}
           onViewportChange={setOffset}
+          sonarCircles={sonarCircles}
+          playerColor={accentColor}
+          fogOfWarEnabled={fogOfWarEnabled}
         />
       )}
       {import.meta.env.DEV && isFairnessOverlayVisible && !isMobile && <DevFairnessOverlay />}
@@ -283,6 +321,8 @@ export const Map = () => {
         onScrollSettingsChange={setScrollSettings}
         fontSize={fontSize}
         onFontSizeChange={setFontSize}
+        fogOfWarEnabled={fogOfWarEnabled}
+        onFogOfWarToggle={setFogOfWarEnabled}
         triggerRef={commandPaletteButtonRef}
         accentColor={accentColor}
         isMobile={isMobile}

@@ -10,6 +10,7 @@ import {
   MINIMAP_WIDTH,
 } from '../mapConstants';
 import { wrap } from '../utils/math';
+import type { SonarCircle } from '../hooks/useFogOfWar';
 
 export interface MinimapProps {
   structures: Structure[];
@@ -20,6 +21,10 @@ export interface MinimapProps {
   minimapTexture: CanvasImageSource | null;
   onViewportChange: (nextOffset: { x: number; y: number }) => void;
   style?: CSSProperties;
+  // Fog of war props
+  sonarCircles?: SonarCircle[];
+  playerColor?: string;
+  fogOfWarEnabled?: boolean;
 }
 
 const getViewportSegments = (start: number, length: number, limit: number) => {
@@ -52,6 +57,9 @@ export const Minimap = ({
   minimapTexture,
   onViewportChange,
   style,
+  sonarCircles = [],
+  playerColor = '#dc3545',
+  fogOfWarEnabled = false,
 }: MinimapProps) => {
   const minimapRef = useRef<HTMLCanvasElement | null>(null);
   const [isPanning, setIsPanning] = useState(false);
@@ -161,14 +169,47 @@ export const Minimap = ({
     const baseScaleX = MINIMAP_WIDTH / MAP_WIDTH;
     const baseScaleY = MINIMAP_HEIGHT / MAP_HEIGHT;
 
-    structures.forEach((structure) => {
-      const { x: structX, y: structY, playerColor, type } = structure;
-      const miniX = structX * baseScaleX;
-      const miniY = structY * baseScaleY;
-
+    // Draw sonar circles if fog of war is enabled
+    if (fogOfWarEnabled && sonarCircles.length > 0) {
       const r = parseInt(playerColor.slice(1, 3), 16);
       const g = parseInt(playerColor.slice(3, 5), 16);
       const b = parseInt(playerColor.slice(5, 7), 16);
+
+      sonarCircles.forEach((circle) => {
+        const miniX = circle.x * baseScaleX;
+        const miniY = circle.y * baseScaleY;
+        const miniRadius = circle.radius * Math.min(baseScaleX, baseScaleY);
+
+        // Draw filled circle with gradient
+        const gradient = ctx.createRadialGradient(miniX, miniY, 0, miniX, miniY, miniRadius);
+        gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.08)`);
+        gradient.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, 0.04)`);
+        gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(miniX, miniY, miniRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw dashed circle outline
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.35)`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.arc(miniX, miniY, miniRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+    }
+
+    structures.forEach((structure) => {
+      const { x: structX, y: structY, playerColor: structColor, type } = structure;
+      const miniX = structX * baseScaleX;
+      const miniY = structY * baseScaleY;
+
+      const r = parseInt(structColor.slice(1, 3), 16);
+      const g = parseInt(structColor.slice(3, 5), 16);
+      const b = parseInt(structColor.slice(5, 7), 16);
 
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.8)`;
 
@@ -221,7 +262,7 @@ export const Minimap = ({
         ctx.strokeRect(viewportX, viewportY, viewportRectWidth, viewportRectHeight);
       });
     });
-  }, [minimapReady, minimapTexture, offset, structures, viewportHeight, viewportWidth]);
+  }, [minimapReady, minimapTexture, offset, structures, viewportHeight, viewportWidth, fogOfWarEnabled, sonarCircles, playerColor]);
 
   return (
     <canvas

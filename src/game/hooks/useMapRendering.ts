@@ -5,6 +5,14 @@ import { drawStructure, drawDroneCount, type Structure } from '../structures';
 import type { FontSizeOption } from '../utils/fontSize';
 import { getResponsiveFontValue } from '../utils/fontSize';
 import { wrap } from '../utils/math';
+import type { PlayerOutpostView } from '../fogOfWar/types';
+import {
+  VISIBILITY_CONFIG,
+  desaturateColor,
+  drawLastSeenIndicator,
+  drawUnknownIndicator,
+  buildVisibilityLookup,
+} from '../fogOfWar/rendering';
 
 interface UseMapRenderingProps {
   canvasRef: RefObject<HTMLCanvasElement>;
@@ -21,6 +29,10 @@ interface UseMapRenderingProps {
   waterReady: boolean;
   isDragging: boolean;
   isMomentum: boolean;
+  // Fog of war props
+  fogOfWarEnabled?: boolean;
+  outpostViews?: PlayerOutpostView[];
+  gameTime?: number;
 }
 
 const LABEL_SCALE_MAP: Record<FontSizeOption, number> = {
@@ -58,6 +70,9 @@ export const useMapRendering = ({
   waterReady,
   isDragging,
   isMomentum,
+  fogOfWarEnabled = false,
+  outpostViews = [],
+  gameTime = Date.now(),
 }: UseMapRenderingProps) => {
   const offsetRef = useRef(offset);
   const fontSizeRef = useRef(fontSize);
@@ -196,6 +211,9 @@ export const useMapRendering = ({
       const wrappedOffsetX = wrap(offsetRef.current.x, MAP_WIDTH);
       const wrappedOffsetY = wrap(offsetRef.current.y, MAP_HEIGHT);
 
+      // Build visibility lookup for fog of war
+      const visibilityLookup = fogOfWarEnabled ? buildVisibilityLookup(outpostViews) : null;
+
       for (let tileX = -1; tileX <= 1; tileX++) {
         for (let tileY = -1; tileY <= 1; tileY++) {
           const tileOffsetX = tileX * MAP_WIDTH;
@@ -220,10 +238,74 @@ export const useMapRendering = ({
               return;
             }
 
-            drawStructure(ctx, structure, tileStartX, tileStartY, time);
-            drawDroneCount(ctx, structure, tileStartX, tileStartY, fontSizeRef.current, isMobile);
+            // Get visibility state for fog of war
+            const outpostView = visibilityLookup?.get(structure.id);
+            const visibility = outpostView?.visibility ?? 'live';
+            const visConfig = VISIBILITY_CONFIG[visibility];
 
+            // Apply visibility-based opacity
+            ctx.save();
+            ctx.globalAlpha = visConfig.structureOpacity;
+
+            // For non-live visibility, we need to modify the structure's color
+            let modifiedStructure = structure;
+            if (visibility !== 'live' && visConfig.colorDesaturation > 0) {
+              const r = parseInt(structure.playerColor.slice(1, 3), 16);
+              const g = parseInt(structure.playerColor.slice(3, 5), 16);
+              const b = parseInt(structure.playerColor.slice(5, 7), 16);
+              const [dr, dg, db] = desaturateColor(r, g, b, visConfig.colorDesaturation);
+              const desatColor = `#${dr.toString(16).padStart(2, '0')}${dg.toString(16).padStart(2, '0')}${db.toString(16).padStart(2, '0')}`;
+              modifiedStructure = { ...structure, playerColor: desatColor };
+            }
+
+            drawStructure(ctx, modifiedStructure, tileStartX, tileStartY, time);
+
+            // Draw drone count based on visibility
+            if (visConfig.droneCountVisible) {
+              // For lastSeen, use the last seen drone count
+              let droneCountStructure = modifiedStructure;
+              if (visibility === 'lastSeen' && outpostView?.visibility === 'lastSeen') {
+                droneCountStructure = {
+                  ...modifiedStructure,
+                  droneCount: outpostView.lastSeenDroneCount,
+                };
+              }
+              drawDroneCount(ctx, droneCountStructure, tileStartX, tileStartY, fontSizeRef.current, isMobile);
+            }
+
+            ctx.restore();
+
+            // Draw visibility indicators
+            if (fogOfWarEnabled && outpostView) {
+              if (outpostView.visibility === 'lastSeen') {
+                drawLastSeenIndicator(
+                  ctx,
+                  structure,
+                  'lastSeen',
+                  outpostView.lastSeenAt,
+                  gameTime,
+                  tileStartX,
+                  tileStartY,
+                  fontSizeRef.current,
+                  isMobile
+                );
+              } else if (outpostView.visibility === 'unknown') {
+                drawUnknownIndicator(
+                  ctx,
+                  structure,
+                  tileStartX,
+                  tileStartY,
+                  fontSizeRef.current,
+                  isMobile
+                );
+              }
+            }
+
+            // Draw labels with visibility-adjusted opacity
             if (structure.label) {
+              ctx.save();
+              ctx.globalAlpha = visConfig.labelOpacity;
+
               const scale = getResponsiveFontValue(fontSizeRef.current, LABEL_SCALE_MAP, isMobile);
               const spacing = LABEL_SPACING_MAP[structure.type] ?? 10;
               const anchorMultiplier = LABEL_ANCHOR_MULTIPLIER_MAP[structure.type] ?? 1;
@@ -237,16 +319,21 @@ export const useMapRendering = ({
               ctx.fillStyle = 'rgba(0,0,0,0.85)';
               ctx.fillRect(textX - 3, textY - 2, textWidth + 6, textHeight + 4);
 
-              const r = parseInt(structure.playerColor.slice(1, 3), 16);
-              const g = parseInt(structure.playerColor.slice(3, 5), 16);
-              const b = parseInt(structure.playerColor.slice(5, 7), 16);
+              let r = parseInt(structure.playerColor.slice(1, 3), 16);
+              let g = parseInt(structure.playerColor.slice(3, 5), 16);
+              let b = parseInt(structure.playerColor.slice(5, 7), 16);
+              if (visibility !== 'live' && visConfig.colorDesaturation > 0) {
+                [r, g, b] = desaturateColor(r, g, b, visConfig.colorDesaturation);
+              }
               drawGlyphText(ctx, text, textX, textY, r, g, b, scale);
+
+              ctx.restore();
             }
           });
         }
       }
     },
-    [isMobile, structures, structuresCanvasRef]
+    [isMobile, structures, structuresCanvasRef, fogOfWarEnabled, outpostViews, gameTime]
   );
 
   useEffect(() => {

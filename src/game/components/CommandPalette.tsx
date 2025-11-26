@@ -12,6 +12,8 @@ interface CommandPaletteProps {
   onScrollSettingsChange: (settings: { invertX: boolean; invertY: boolean }) => void;
   fontSize: FontSizeOption;
   onFontSizeChange: (size: FontSizeOption) => void;
+  fogOfWarEnabled: boolean;
+  onFogOfWarToggle: (enabled: boolean) => void;
   triggerRef?: RefObject<HTMLElement>;
   accentColor?: string;
   isMobile?: boolean;
@@ -83,6 +85,8 @@ export const CommandPalette = ({
   onScrollSettingsChange,
   fontSize,
   onFontSizeChange,
+  fogOfWarEnabled,
+  onFogOfWarToggle,
   triggerRef,
   accentColor = DEFAULT_ACCENT_COLOR,
   isMobile = false,
@@ -102,6 +106,12 @@ export const CommandPalette = ({
       id: 'font-size',
       label: 'Font Size',
       type: 'action',
+    },
+    {
+      id: 'fog-of-war',
+      label: `${fogOfWarEnabled ? '✓ ' : ''}Fog of War`,
+      type: 'action',
+      action: () => onFogOfWarToggle(!fogOfWarEnabled),
     },
   ];
 
