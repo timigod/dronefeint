@@ -280,6 +280,11 @@ export const Map = () => {
         sonarCircles={sonarCircles}
         playerColor={accentColor}
         enabled={fogOfWarEnabled}
+        highlightedOutpostId={
+          hoveredStructure?.ownerId === activePlayer?.id
+            ? hoveredStructure?.id
+            : undefined
+        }
       />
       <canvas
         ref={structuresCanvasRef}

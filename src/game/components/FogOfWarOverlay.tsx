@@ -13,6 +13,7 @@ interface FogOfWarOverlayProps {
   sonarCircles: SonarCircle[];
   playerColor: string;
   enabled: boolean;
+  highlightedOutpostId?: string;
 }
 
 // Edge fade distance in pixels
@@ -27,6 +28,7 @@ export const FogOfWarOverlay = ({
   sonarCircles,
   playerColor,
   enabled,
+  highlightedOutpostId,
 }: FogOfWarOverlayProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -134,12 +136,14 @@ export const FogOfWarOverlay = ({
             return;
           }
 
+          const isHighlighted = circle.outpostId === highlightedOutpostId;
+
           // Draw dithered ring at the edge of sonar radius
-          drawDitheredRing(ctx, screenX, screenY, circle.radius, r, g, b);
+          drawDitheredRing(ctx, screenX, screenY, circle.radius, r, g, b, isHighlighted);
         });
       }
     }
-  }, [enabled, offset, playerColor, sonarCircles, viewportHeight, viewportWidth]);
+  }, [enabled, offset, playerColor, sonarCircles, viewportHeight, viewportWidth, highlightedOutpostId]);
 
   // Draw a dithered ring at the edge of sonar coverage
   const drawDitheredRing = (
@@ -149,18 +153,19 @@ export const FogOfWarOverlay = ({
     radius: number,
     r: number,
     g: number,
-    b: number
+    b: number,
+    isHighlighted: boolean = false
   ) => {
-    const ringWidth = 20; // Width of the dithered ring
+    const ringWidth = isHighlighted ? 22 : 20;
     const innerRadius = radius - ringWidth / 2;
     const outerRadius = radius + ringWidth / 2;
 
     // Draw dots in a ring pattern using Bayer dithering
-    for (let angle = 0; angle < Math.PI * 2; angle += 0.02) {
+    for (let angle = 0; angle < Math.PI * 2; angle += isHighlighted ? 0.018 : 0.02) {
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
 
-      for (let d = innerRadius; d <= outerRadius; d += DOT_SPACING) {
+      for (let d = innerRadius; d <= outerRadius; d += isHighlighted ? DOT_SPACING * 0.85 : DOT_SPACING) {
         const px = centerX + cos * d;
         const py = centerY + sin * d;
 
@@ -174,23 +179,41 @@ export const FogOfWarOverlay = ({
         const threshold = BAYER_4x4[bayerY][bayerX];
 
         // Only draw if normalized distance exceeds dither threshold
-        if (normalizedDist > threshold * 0.8) {
-          const alpha = 0.15 + normalizedDist * 0.25;
-          const intensity = 0.6 + normalizedDist * 0.4;
+        // Slightly more forgiving threshold for highlighted rings
+        const thresholdMultiplier = isHighlighted ? 0.65 : 0.8;
+        if (normalizedDist > threshold * thresholdMultiplier) {
+          const baseAlpha = isHighlighted ? 0.22 : 0.15;
+          const alphaMultiplier = isHighlighted ? 0.35 : 0.25;
+          const alpha = baseAlpha + normalizedDist * alphaMultiplier;
+          
+          const baseIntensity = isHighlighted ? 0.7 : 0.6;
+          const intensityMultiplier = isHighlighted ? 0.3 : 0.4;
+          const intensity = baseIntensity + normalizedDist * intensityMultiplier;
+          
           ctx.fillStyle = `rgba(${Math.floor(r * intensity)}, ${Math.floor(g * intensity)}, ${Math.floor(b * intensity)}, ${alpha})`;
           ctx.fillRect(px, py, 1.5, 1.5);
         }
       }
     }
 
-    // Draw a subtle solid line at the exact radius for clarity
-    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.25)`;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([8, 12]);
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // Draw a line at the exact radius for clarity
+    if (isHighlighted) {
+      // Solid line for highlighted ring
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.45)`;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.25)`;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([8, 12]);
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   };
 
   useEffect(() => {
