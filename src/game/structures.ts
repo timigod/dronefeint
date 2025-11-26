@@ -559,6 +559,7 @@ const DIGIT_SEGMENTS: Record<string, boolean[]> = {
   '9': [true, true, true, true, false, true, true],
   '/': [false, false, false, false, false, false, false], // Special: drawn as diagonal
   '%': [false, false, false, false, false, false, false], // Special: drawn as circles + diagonal
+  '?': [false, false, false, false, false, false, false], // Special: drawn as curve + dot
 };
 
 function drawDigit(
@@ -600,6 +601,23 @@ function drawDigit(
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
       ctx.fillRect(px, py, scale, scale);
     }
+    return;
+  }
+
+  if (digit === '?') {
+    // Draw question mark in 7-segment style
+    // Top curve: top segment + top-right segment
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
+    ctx.fillRect(x, y, w, scale); // top
+    ctx.fillRect(x + w - scale, y, scale, h + gap); // top-right
+    // Middle hook
+    ctx.fillRect(x + scale, y + h, w - scale, scale); // middle (offset left)
+    // Stem down from middle (centered)
+    const stemX = x + Math.floor(w / 2) - Math.floor(scale / 2);
+    ctx.fillRect(stemX, y + h + gap, scale, scale * 1.5);
+    // Dot at bottom (centered)
+    const dotY = y + h * 2 + gap + scale;
+    ctx.fillRect(stemX, dotY, scale, scale);
     return;
   }
 
@@ -651,6 +669,47 @@ function drawDigit(
   }
 }
 
+// 7-segment text dimensions
+export const SEGMENT_DIGIT_WIDTH = 5;
+export const SEGMENT_DIGIT_HEIGHT = 7;
+export const SEGMENT_DIGIT_SPACING = 1;
+
+// Vertical spacing for drone count / indicators below structures
+export const DRONE_COUNT_SPACING: Record<StructureType, number> = {
+  hq: -3,         // nest right under the tower
+  foundry: -2,    // sit inside the main body
+  reactor: 14,    // still needs the extra clearance
+  extractor: -10, // already very close
+};
+
+export function measureSegmentText(text: string, scale: number = 1): number {
+  if (!text.length) return 0;
+  const digitWidth = SEGMENT_DIGIT_WIDTH * scale;
+  const spacing = SEGMENT_DIGIT_SPACING * scale;
+  return text.length * (digitWidth + spacing) - spacing;
+}
+
+export function drawSegmentText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  r: number,
+  g: number,
+  b: number,
+  scale: number = 1
+) {
+  const digitWidth = SEGMENT_DIGIT_WIDTH * scale;
+  const spacing = SEGMENT_DIGIT_SPACING * scale;
+  let offsetX = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    drawDigit(ctx, text[i], x + offsetX, y, r, g, b, scale);
+    offsetX += digitWidth + spacing;
+  }
+}
+
+// Alias for internal use
 function drawText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -661,14 +720,7 @@ function drawText(
   b: number,
   scale: number = 1
 ) {
-  const digitWidth = 5 * scale;
-  const spacing = 1 * scale;
-  let offsetX = 0;
-
-  for (let i = 0; i < text.length; i++) {
-    drawDigit(ctx, text[i], x + offsetX, y, r, g, b, scale);
-    offsetX += digitWidth + spacing;
-  }
+  drawSegmentText(ctx, text, x, y, r, g, b, scale);
 }
 
 // Draw drone count display on a structure
@@ -691,13 +743,7 @@ export function drawDroneCount(
   const g = parseInt(playerColor.slice(3, 5), 16);
   const b = parseInt(playerColor.slice(5, 7), 16);
 
-  const spacingByType: Record<StructureType, number> = {
-    hq: -3,         // nest right under the tower
-    foundry: -2,    // sit inside the main body
-    reactor: 14,    // still needs the extra clearance
-    extractor: -10, // already very close
-  };
-  const spacing = spacingByType[type] ?? 3;
+  const spacing = DRONE_COUNT_SPACING[type] ?? 3;
 
   const text = `${structure.droneCount}`;
   

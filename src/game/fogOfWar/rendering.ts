@@ -1,5 +1,11 @@
 import type { PlayerOutpostView } from './types';
 import type { Structure } from '../structures';
+import {
+  DRONE_COUNT_SPACING,
+  SEGMENT_DIGIT_HEIGHT,
+  drawSegmentText,
+  measureSegmentText,
+} from '../structures';
 import { GLYPH_HEIGHT, drawGlyphText, measureGlyphText } from '../glyphs';
 import type { FontSizeOption } from '../utils/fontSize';
 import { getResponsiveFontValue } from '../utils/fontSize';
@@ -86,7 +92,7 @@ export const drawLastSeenIndicator = (
   fontSize: FontSizeOption,
   isMobile: boolean
 ) => {
-  const { x, y, size, playerColor } = structure;
+  const { x, y, size, playerColor, type } = structure;
   const screenX = x + offsetX;
   const screenY = y + offsetY;
 
@@ -104,8 +110,9 @@ export const drawLastSeenIndicator = (
   const textHeight = GLYPH_HEIGHT * scale;
 
   // Position below the drone count area
+  const spacing = DRONE_COUNT_SPACING[type] ?? 3;
   const textX = screenX - textWidth / 2;
-  const textY = screenY + size + 24; // Below drone count
+  const textY = screenY + size + spacing + 21; // Below drone count
 
   // Background
   const paddingX = 4;
@@ -122,7 +129,7 @@ export const drawLastSeenIndicator = (
   drawGlyphText(ctx, timeText, textX, textY, r, g, b, scale);
 };
 
-// Draw "unknown" indicator (question mark pattern)
+// Draw "unknown" indicator (question marks in 7-segment style to match drone counts)
 export const drawUnknownIndicator = (
   ctx: CanvasRenderingContext2D,
   structure: Structure,
@@ -131,35 +138,37 @@ export const drawUnknownIndicator = (
   fontSize: FontSizeOption,
   isMobile: boolean
 ) => {
-  const { x, y, size, playerColor } = structure;
+  const { x, y, size, playerColor, type } = structure;
   const screenX = x + offsetX;
   const screenY = y + offsetY;
 
-  const { r, g, b, opacity } = getVisibilityAdjustedColor(playerColor, 'unknown');
+  const { r, g, b } = getVisibilityAdjustedColor(playerColor, 'unknown');
 
+  // Use same scale mapping as drone counts for visual consistency
   const scaleMap: Record<FontSizeOption, number> = {
-    small: 1.2,
-    medium: 1.5,
-    large: 1.8,
+    small: 1.5,
+    medium: 1.8,
+    large: 2.1,
   };
   const scale = getResponsiveFontValue(fontSize, scaleMap, isMobile);
 
   const text = '???';
-  const textWidth = measureGlyphText(text, scale);
-  const textHeight = GLYPH_HEIGHT * scale;
+  const textWidth = measureSegmentText(text, scale);
+  const textHeight = SEGMENT_DIGIT_HEIGHT * scale;
 
-  // Position below structure
+  // Position below structure (same spacing as drone counts)
+  const spacing = DRONE_COUNT_SPACING[type] ?? 3;
   const textX = screenX - textWidth / 2;
-  const textY = screenY + size + 8;
+  const textY = screenY + size + spacing;
 
-  // Background
+  // Background (same style as drone counts)
   const paddingX = 4;
   const paddingY = 3;
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 1)';
   ctx.fillRect(textX - paddingX, textY - paddingY, textWidth + paddingX * 2, textHeight + paddingY * 2);
 
-  // Draw with pulsing opacity effect (will be animated)
-  drawGlyphText(ctx, text, textX, textY, r, g, b, scale);
+  // Draw using 7-segment style (matches drone count numbers)
+  drawSegmentText(ctx, text, textX, textY, r, g, b, scale);
 };
 
 // Get drone count to display based on visibility
