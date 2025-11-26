@@ -187,11 +187,30 @@ export const Minimap = ({
     if (fogOfWarEnabled && sonarCircles.length > 0) {
       const [r, g, b] = parseHexColor(playerColor);
 
-      sonarCircles.forEach((circle) => {
-        const miniX = circle.x * baseScaleX;
-        const miniY = circle.y * baseScaleY;
-        const miniRadius = circle.radius * Math.min(baseScaleX, baseScaleY);
+      // Pre-compute minimap positions for all circles
+      const miniCircles = sonarCircles.map((circle) => ({
+        miniX: circle.x * baseScaleX,
+        miniY: circle.y * baseScaleY,
+        miniRadius: circle.radius * Math.min(baseScaleX, baseScaleY),
+        outpostId: circle.outpostId,
+      }));
 
+      // Helper to check if a point is inside any OTHER circle
+      const isInsideOtherCircle = (px: number, py: number, currentOutpostId: string): boolean => {
+        for (const other of miniCircles) {
+          if (other.outpostId === currentOutpostId) continue;
+          const dx = px - other.miniX;
+          const dy = py - other.miniY;
+          const distSq = dx * dx + dy * dy;
+          // Use slightly smaller radius to avoid edge flickering
+          if (distSq < (other.miniRadius - 1) * (other.miniRadius - 1)) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      miniCircles.forEach(({ miniX, miniY, miniRadius, outpostId }) => {
         // Draw filled circle with gradient
         const gradient = ctx.createRadialGradient(miniX, miniY, 0, miniX, miniY, miniRadius);
         gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.08)`);
@@ -203,13 +222,41 @@ export const Minimap = ({
         ctx.arc(miniX, miniY, miniRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw dashed circle outline
+        // Draw dashed circle outline - only external portions (not inside other circles)
         ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.35)`;
         ctx.lineWidth = 1;
         ctx.setLineDash([2, 2]);
-        ctx.beginPath();
-        ctx.arc(miniX, miniY, miniRadius, 0, Math.PI * 2);
-        ctx.stroke();
+        
+        // Draw arc segments, skipping internal portions entirely
+        const segmentAngle = 0.1; // Angle increment
+        let inSegment = false;
+        let segmentStart = 0;
+        
+        for (let angle = 0; angle <= Math.PI * 2 + segmentAngle; angle += segmentAngle) {
+          const px = miniX + Math.cos(angle) * miniRadius;
+          const py = miniY + Math.sin(angle) * miniRadius;
+          const isInternal = isInsideOtherCircle(px, py, outpostId);
+          
+          if (!isInternal && !inSegment) {
+            // Start a new visible segment
+            inSegment = true;
+            segmentStart = angle;
+          } else if (isInternal && inSegment) {
+            // End the current visible segment
+            ctx.beginPath();
+            ctx.arc(miniX, miniY, miniRadius, segmentStart, angle);
+            ctx.stroke();
+            inSegment = false;
+          }
+        }
+        
+        // Close any remaining segment
+        if (inSegment) {
+          ctx.beginPath();
+          ctx.arc(miniX, miniY, miniRadius, segmentStart, Math.PI * 2);
+          ctx.stroke();
+        }
+        
         ctx.setLineDash([]);
       });
     }

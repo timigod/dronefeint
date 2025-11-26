@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { useCallback, useRef, type RefObject } from 'react';
 import type React from 'react';
 import type { Structure } from '../structures';
 
@@ -38,11 +38,7 @@ export const useMapInteractions = ({
   const touchStartTimeRef = useRef(0);
   const touchCanvasStartRef = useRef<{ x: number; y: number } | null>(null);
   const isTouchDraggingRef = useRef(false);
-  const touchLastHoveredRef = useRef<Structure | null>(null);
-
-  useEffect(() => {
-    touchLastHoveredRef.current = hoveredStructure;
-  }, [hoveredStructure]);
+  const lastTappedStructureIdRef = useRef<string | null>(null);
 
   const toCanvasCoords = useCallback(
     (clientX: number, clientY: number) => {
@@ -105,10 +101,9 @@ export const useMapInteractions = ({
       touchStartTimeRef.current = Date.now();
       isTouchDraggingRef.current = false;
 
-      touchLastHoveredRef.current = hoveredStructure;
       clearHover();
     },
-    [clearHover, hoveredStructure, offset, toCanvasCoords]
+    [clearHover, offset, toCanvasCoords]
   );
 
   const handleTouchMove = useCallback(
@@ -133,6 +128,7 @@ export const useMapInteractions = ({
         if (startCoords) {
           beginDrag(startCoords.x, startCoords.y);
         }
+        lastTappedStructureIdRef.current = null;
       }
 
       if (isTouchDraggingRef.current && coords) {
@@ -165,13 +161,14 @@ export const useMapInteractions = ({
           if (coords) {
             setMousePos(coords);
             const tappedStructure = updateHover({ clientX: coords.x, clientY: coords.y, offset });
-            const previouslyHovered = touchLastHoveredRef.current;
-
-            if (tappedStructure && previouslyHovered && tappedStructure.id === previouslyHovered.id) {
+            if (tappedStructure && lastTappedStructureIdRef.current === tappedStructure.id) {
               clearHover();
-              touchLastHoveredRef.current = null;
+              lastTappedStructureIdRef.current = null;
             } else {
-              touchLastHoveredRef.current = tappedStructure ?? null;
+              lastTappedStructureIdRef.current = tappedStructure?.id ?? null;
+            }
+            if (!tappedStructure) {
+              clearHover();
             }
           }
         }
