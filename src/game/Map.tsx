@@ -277,6 +277,8 @@ export const Map = () => {
         offset={offset}
         viewportWidth={viewportWidth}
         viewportHeight={viewportHeight}
+        displayWidth={displayWidth}
+        displayHeight={displayHeight}
         sonarCircles={sonarCircles}
         playerColor={accentColor}
         enabled={fogOfWarEnabled}

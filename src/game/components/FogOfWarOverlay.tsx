@@ -10,6 +10,8 @@ interface FogOfWarOverlayProps {
   offset: { x: number; y: number };
   viewportWidth: number;
   viewportHeight: number;
+  displayWidth?: number;
+  displayHeight?: number;
   sonarCircles: SonarCircle[];
   playerColor: string;
   enabled: boolean;
@@ -25,6 +27,8 @@ export const FogOfWarOverlay = ({
   offset,
   viewportWidth,
   viewportHeight,
+  displayWidth,
+  displayHeight,
   sonarCircles,
   playerColor,
   enabled,
@@ -237,8 +241,8 @@ export const FogOfWarOverlay = ({
         position: 'absolute',
         top: 0,
         left: 0,
-        width: viewportWidth,
-        height: viewportHeight,
+        width: displayWidth ? `${displayWidth}px` : `${viewportWidth}px`,
+        height: displayHeight ? `${displayHeight}px` : `${viewportHeight}px`,
         pointerEvents: 'none',
         zIndex: Z_INDEX.fogOfWar, // Above terrain and grid, below structures
       }}
